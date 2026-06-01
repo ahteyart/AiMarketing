@@ -1,5 +1,6 @@
 "use client";
 import { useState } from "react";
+import Image from "next/image";
 import { api } from "@/lib/api";
 import { FileSpreadsheet, FolderOpen, CheckCircle, Upload } from "lucide-react";
 
@@ -69,7 +70,7 @@ export default function ExportPage() {
             onClick={handleGoogleAuth}
             className="flex items-center gap-2 text-sm px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
           >
-            <img src="https://www.google.com/favicon.ico" alt="" className="w-4 h-4" />
+            <Image src="https://www.google.com/favicon.ico" alt="" width={16} height={16} unoptimized />
             连接 Google 账号
           </button>
           <div className="mt-3">

@@ -8,6 +8,7 @@ const nextConfig = {
       { protocol: "https", hostname: "*.canva.com" },
       { protocol: "https", hostname: "*.canvausercontent.com" },
       { protocol: "http", hostname: "localhost" },
+      { protocol: "https", hostname: "www.google.com" },
     ],
   },
 };
