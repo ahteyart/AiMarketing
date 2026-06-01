@@ -19,6 +19,7 @@ class Campaign(Base):
     target_audience: Mapped[str | None] = mapped_column(Text)
     target_platforms: Mapped[list[str] | None] = mapped_column(ARRAY(String))
     keywords: Mapped[list[str] | None] = mapped_column(ARRAY(String))
+    language: Mapped[str] = mapped_column(String(20), default="english")
     status: Mapped[str] = mapped_column(String(50), default="active")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

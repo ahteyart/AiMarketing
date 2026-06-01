@@ -29,6 +29,7 @@ class CalendarEntry(Base):
     suggested_hooks: Mapped[list[str] | None] = mapped_column(ARRAY(String))
     suggested_hashtags: Mapped[list[str] | None] = mapped_column(ARRAY(String))
     content_format: Mapped[str | None] = mapped_column(String(100))  # e.g. "9:16 Reel", "3:4 图文笔记"
+    content_style: Mapped[str | None] = mapped_column(String(50))
 
     # planning | generating | pending_review | approved | exported
     status: Mapped[str] = mapped_column(String(50), default="planned")

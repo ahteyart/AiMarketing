@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.calendar_entry import CalendarEntry
 from app.models.campaign import Campaign
-from app.planner.calendar_generator import generate_30_day_calendar
+from app.planner.calendar_generator import generate_calendar
 
 router = APIRouter(prefix="/planner", tags=["planner"])
 
@@ -18,6 +18,8 @@ class GenerateCalendarRequest(BaseModel):
     campaign_id: UUID
     start_date: date | None = None
     platforms: list[str] | None = None
+    days: int = 30
+    language: str | None = None
 
 
 class CalendarEntryResponse(BaseModel):
@@ -31,6 +33,7 @@ class CalendarEntryResponse(BaseModel):
     suggested_hooks: list[str] | None
     suggested_hashtags: list[str] | None
     content_format: str | None
+    content_style: str | None = None
     status: str
 
     class Config:
@@ -52,7 +55,7 @@ async def get_calendar(
 
 
 @router.post("/generate")
-async def generate_calendar(
+async def generate_calendar_endpoint(
     body: GenerateCalendarRequest,
     background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
@@ -63,6 +66,8 @@ async def generate_calendar(
 
     platforms = body.platforms or campaign.target_platforms or ["instagram", "facebook", "xiaohongshu"]
     start_date = body.start_date or date.today()
+    language = body.language or getattr(campaign, "language", "english") or "english"
+    days = max(1, min(body.days, 30))
 
     background_tasks.add_task(
         _generate_calendar_task,
@@ -70,10 +75,18 @@ async def generate_calendar(
         campaign.name,
         campaign.brand_voice or "",
         campaign.target_audience or "",
+        list(campaign.keywords or []),
         platforms,
         start_date,
+        language,
+        days,
     )
-    return {"message": "Calendar generation started. Check /planner/{campaign_id}/calendar shortly."}
+    return {
+        "message": f"Generating {days}-day calendar in {language}. Check /planner/{body.campaign_id}/calendar shortly.",
+        "days": days,
+        "language": language,
+        "platforms": platforms,
+    }
 
 
 @router.patch("/entry/{entry_id}", response_model=CalendarEntryResponse)
@@ -98,9 +111,13 @@ async def _generate_calendar_task(
     campaign_name: str,
     brand_voice: str,
     target_audience: str,
+    keywords: list[str],
     platforms: list[str],
     start_date: date,
+    language: str,
+    days: int,
 ):
+    import json
     import logging
     from app.database import AsyncSessionLocal
 
@@ -108,29 +125,28 @@ async def _generate_calendar_task(
 
     async with AsyncSessionLocal() as db:
         try:
-            research_posts: list[dict] = []
-
-            entries = await generate_30_day_calendar(
+            entries = await generate_calendar(
                 campaign_name=campaign_name,
                 brand_voice=brand_voice,
                 target_audience=target_audience,
+                keywords=keywords,
+                language=language,
+                days=days,
                 platforms=platforms,
-                research_posts=research_posts,
                 start_date=start_date,
             )
 
-            # Clear existing calendar entries for this campaign
-            existing = await db.execute(select(CalendarEntry).where(CalendarEntry.campaign_id == campaign_id))
+            # Clear existing entries for this campaign
+            existing = await db.execute(
+                select(CalendarEntry).where(CalendarEntry.campaign_id == campaign_id)
+            )
             for entry in existing.scalars().all():
                 await db.delete(entry)
 
-            # Save new entries
             for entry_data in entries:
-                import json
                 aida = entry_data.get("aida_brief")
-                aida_str = json.dumps(aida, ensure_ascii=False) if isinstance(aida, dict) else aida
-
-                entry = CalendarEntry(
+                aida_str = json.dumps(aida, ensure_ascii=False) if isinstance(aida, dict) else (aida or "")
+                db.add(CalendarEntry(
                     campaign_id=campaign_id,
                     day_number=entry_data.get("day_number", 1),
                     scheduled_date=entry_data.get("scheduled_date"),
@@ -141,12 +157,12 @@ async def _generate_calendar_task(
                     suggested_hooks=entry_data.get("suggested_hooks", []),
                     suggested_hashtags=entry_data.get("suggested_hashtags", []),
                     content_format=entry_data.get("content_format"),
-                )
-                db.add(entry)
+                    content_style=entry_data.get("content_style"),
+                ))
 
             await db.commit()
-            logger.info("Calendar generated: %d entries for campaign %s", len(entries), campaign_id)
+            logger.info("Calendar done: %d entries, campaign %s (%s, %dd)", len(entries), campaign_id, language, days)
 
         except Exception as e:
-            logger.error("Calendar generation failed: %s", e)
+            logger.error("Calendar generation failed for %s: %s", campaign_id, e)
             await db.rollback()

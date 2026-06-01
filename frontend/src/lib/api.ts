@@ -16,8 +16,8 @@ export const updateCampaign = (id: string, data: object) => api.patch(`/campaign
 // ── 30-Day Planner ─────────────────────────────────────────
 export const getCalendar = (campaignId: string, platform?: string) =>
   api.get(`/planner/${campaignId}/calendar`, { params: { platform } }).then((r) => r.data);
-export const generateCalendar = (campaignId: string, startDate?: string) =>
-  api.post("/planner/generate", { campaign_id: campaignId, start_date: startDate }).then((r) => r.data);
+export const generateCalendar = (campaignId: string, startDate?: string, days: number = 30, language?: string) =>
+  api.post("/planner/generate", { campaign_id: campaignId, start_date: startDate, days, language }).then((r) => r.data);
 export const updateCalendarEntry = (entryId: string, data: object) =>
   api.patch(`/planner/entry/${entryId}`, data).then((r) => r.data);
 

@@ -1,7 +1,7 @@
 """
 AIDA-structured copywriter using Claude.
-Every generated copy follows: Attention → Interest → Desire → Action.
-Each platform has specific constraints enforced at generation time.
+Supports Malay / English / Chinese with platform-specific rules.
+Each piece is tied to a content_style to ensure variety across the calendar.
 """
 
 import json
@@ -14,168 +14,149 @@ from app.planner.platform_rules import PLATFORM_RULES, check_compliance
 
 logger = logging.getLogger(__name__)
 
-BASE_AIDA_SYSTEM = """你是资深社交媒体文案师，所有内容必须严格遵循 AIDA 模型结构：
-- [A] Attention（吸引注意）：第一句/标题必须在3秒内抓住用户注意力，引发好奇或强烈共鸣
-- [I] Interest（激发兴趣）：点出用户痛点或产品核心亮点，让用户想继续读
-- [D] Desire（引发欲望）：描述具体使用场景、效果、情感价值，让用户产生渴望
-- [A] Action（行动号召）：结尾明确告诉用户下一步该做什么
+LANGUAGE_SYSTEM_PROMPTS = {
+    "english": (
+        "You are an expert social media copywriter. Write in natural, conversational English. "
+        "No corporate speak. Every post MUST follow the AIDA framework:\n"
+        "- [A] Attention: First line stops the scroll in 3 seconds — bold claim, surprising stat, or emotional hook\n"
+        "- [I] Interest: Address the core pain point or key benefit — make them want to keep reading\n"
+        "- [D] Desire: Paint a vivid, specific picture of the value — make them feel they need this\n"
+        "- [A] Action: End with a clear, direct CTA that tells them exactly what to do\n"
+        "Output JSON only."
+    ),
+    "malay": (
+        "Anda adalah pakar penulis kandungan media sosial. Tulis dalam Bahasa Melayu yang semasa dan santai. "
+        "Boleh campur sedikit Bahasa Inggeris (Manglish) untuk gaya Malaysia yang natural. "
+        "Setiap post MESTI ikut model AIDA:\n"
+        "- [A] Perhatian: Baris pertama hentikan pengguna tatal dalam 3 saat — dakwaan berani, fakta mengejutkan, atau hook emosi\n"
+        "- [I] Minat: Tuju titik kesakitan atau manfaat utama — buat mereka mahu terus baca\n"
+        "- [D] Keinginan: Lukiskan gambaran spesifik nilai produk — buat mereka rasa perlu ini\n"
+        "- [A] Tindakan: Akhiri dengan CTA yang jelas (Simpan / Kongsi / Komen / Klik link)\n"
+        "Output JSON sahaja."
+    ),
+    "chinese": (
+        "你是专业社交媒体文案师。用自然、有亲和力的中文写作（简体）。不要企业化语言，要像真实的人在说话。"
+        "每篇内容必须严格遵循AIDA模型：\n"
+        "- [A] 吸引注意：第一句在3秒内让用户停止滑动——大胆主张、意外数据或情感钩子\n"
+        "- [I] 激发兴趣：触及核心痛点或关键卖点——让他们想继续阅读\n"
+        "- [D] 引发欲望：描绘价值的具体生动画面——让他们感到需要这个\n"
+        "- [A] 行动号召：以清晰直接的CTA结尾（收藏/分享/评论/点击）\n"
+        "只输出JSON。"
+    ),
+}
 
-语气自然真实，避免硬广感。输出 JSON 格式。"""
-
-PLATFORM_COPY_PROMPTS = {
-    "instagram": """生成一条 Instagram 帖子文案，严格遵循 AIDA 结构和平台规范。
-
-平台规范：
-- 总字数 ≤ 2200 字符
-- 开头150字内包含核心信息（超出部分被折叠）
-- 最多 5 个高度相关标签（不要堆砌无关标签）
-- 可使用英中双语
-- 禁止帖子中放链接
-
-AIDA 要求：
-[A] 开头1-2行：爆炸性 hook，让用户停止滑动（反常识、数字、强烈问题）
-[I] 中段：用 emoji 分点，展开痛点或亮点
-[D] 具体场景/效果/情感，有画面感
-[A] 结尾 CTA：「保存备用 👇」「你试过吗？评论告诉我」「关注获取更多」
-
-输出 JSON（3个变体）：
-{
-  "variants": [
-    {
-      "copy_attention": "[A] hook 内容",
-      "copy_interest": "[I] 正文内容",
-      "copy_desire": "[D] 欲望描述",
-      "copy_action": "[A] CTA",
-      "full_copy": "完整文案（含换行和emoji）",
-      "hashtags": ["#tag1", "#tag2", "#tag3", "#tag4", "#tag5"],
-      "hook_type": "question|statistic|contrast|story"
-    }
-  ]
-}""",
-
-    "facebook": """生成一条 Facebook 帖子文案，严格遵循 AIDA 结构和平台规范。
-
-平台规范：
-- 最佳长度 ≤ 400 字符（更长内容需点击展开）
-- 最多 2 个相关标签
-- 对话化语气，引发评论互动
-- 可以包含号召性问题
-
-AIDA 要求：
-[A] 前2行（折叠前可见）：引人好奇的反常识陈述或强烈问题
-[I] 简短故事或数据，引发共鸣
-[D] 具体价值主张，可感可想象
-[A] 引发互动的 CTA：「你觉得呢？」「留言分享你的经历」「点赞如果你也有同感」
-
-输出 JSON（3个变体）：
-{
-  "variants": [
-    {
-      "copy_attention": "[A] hook 内容",
-      "copy_interest": "[I] 正文内容",
-      "copy_desire": "[D] 欲望描述",
-      "copy_action": "[A] CTA",
-      "full_copy": "完整文案",
-      "hashtags": ["#tag1", "#tag2"],
-      "hook_type": "question|statistic|contrast|story"
-    }
-  ]
-}""",
-
-    "xiaohongshu": """生成一篇小红书笔记，严格遵循 AIDA 结构和平台规范。
-
-平台规范：
-- 标题 ≤ 20 字（中文）
-- 正文 ≤ 1000 字
-- 3-5 个中文话题标签（#话题格式）
-- 禁止任何第三方链接
-- 语气个人化：「我」「姐妹们」「宝子」等亲切称呼
-- 使用 emoji 增加可读性和分段感
-
-AIDA 要求：
-[A] 标题（≤20字）：数字/疑问/反转，如「我用了1个月才发现这件事...」「同款你买了吗？」
-[I] 开篇：引出使用场景或发现契机，「我真的没想到」「姐妹们，这个真的绝了」
-[D] 核心内容：具体效果/步骤/感受，有图有真相的文字描述，配合 emoji 分段
-[A] 结尾：自然 CTA「先收藏不亏⭐」「你们有同款吗？评论区见」
-
-输出 JSON（3个变体）：
-{
-  "variants": [
-    {
-      "title": "标题（≤20字）",
-      "copy_attention": "[A] 开篇 hook",
-      "copy_interest": "[I] 正文兴趣段",
-      "copy_desire": "[D] 欲望/效果段",
-      "copy_action": "[A] 结尾 CTA",
-      "full_copy": "完整正文（不含标题）",
-      "hashtags": ["#话题1", "#话题2", "#话题3"],
-      "hook_type": "question|statistic|contrast|personal_story"
-    }
-  ]
-}""",
+PLATFORM_COPY_RULES = {
+    "instagram": {
+        "max_chars": 2200,
+        "optimal_chars": 150,
+        "max_hashtags": 5,
+        "notes": "First 150 chars are visible before 'more'. Use emojis to break up text. Hashtags at the end only.",
+    },
+    "facebook": {
+        "max_chars": 400,
+        "optimal_chars": 200,
+        "max_hashtags": 2,
+        "notes": "Conversational tone. Designed to generate comments. End with a question to boost engagement.",
+    },
+    "xiaohongshu": {
+        "max_chars": 1000,
+        "title_max": 20,
+        "max_hashtags": 5,
+        "notes": "Title ≤20 Chinese chars. Personal, authentic diary-style tone. No external links. Use emojis and line breaks.",
+    },
 }
 
 
-async def generate_copy(
+async def generate_aida_copy(
     platform: str,
     theme: str,
-    aida_brief: dict | None,
-    brand_voice: str,
-    target_audience: str,
-    research_context: str = "",
-    content_type: str = "image_post",
+    aida_brief: dict,
+    content_style: str,
+    language: str = "english",
+    brand_voice: str = "",
+    target_audience: str = "",
 ) -> dict:
-    """Generate AIDA-structured copy variants for a given platform."""
-    platform_prompt = PLATFORM_COPY_PROMPTS.get(platform)
-    if not platform_prompt:
-        raise ValueError(f"Unsupported platform: {platform}")
+    """
+    Generate 3 AIDA copy variants for a given platform, theme, style, and language.
+    Returns the best variant plus all variants and compliance check.
+    """
+    language = language.lower() if language else "english"
+    if language not in LANGUAGE_SYSTEM_PROMPTS:
+        language = "english"
 
-    rules = PLATFORM_RULES.get(platform, {})
-    aida_guide = ""
-    if aida_brief:
-        aida_guide = f"""
-基于以下 AIDA 方向创作：
-- [A] Attention 方向: {aida_brief.get('attention', '')}
-- [I] Interest 方向: {aida_brief.get('interest', '')}
-- [D] Desire 方向: {aida_brief.get('desire', '')}
-- [A] Action 方向: {aida_brief.get('action', '')}
-"""
+    system = LANGUAGE_SYSTEM_PROMPTS[language]
+    platform_rules = PLATFORM_COPY_RULES.get(platform, PLATFORM_COPY_RULES["instagram"])
+    rules_str = PLATFORM_RULES.get(platform, {})
 
-    user_content = f"""内容主题：{theme}
-内容类型：{content_type}
-品牌调性：{brand_voice or '专业、真实、有温度'}
-目标受众：{target_audience or '25-35岁都市女性'}
-{aida_guide}
-{"相关调研热点：" + research_context if research_context else ""}
+    style_note = f"Content style for this post: **{content_style}** — make the approach and hook match this style."
 
-{platform_prompt}"""
+    user = f"""Generate 3 copy variants for this social media post.
+
+Platform: {platform.upper()}
+Platform rules: max {platform_rules.get("max_chars", 2200)} chars, max {platform_rules.get("max_hashtags", 5)} hashtags. {platform_rules.get("notes", "")}
+
+Brand voice: {brand_voice or "Warm, authentic, trustworthy"}
+Target audience: {target_audience or "General audience"}
+Post theme: {theme}
+{style_note}
+
+AIDA direction (use these as your creative brief):
+- [A] Attention: {aida_brief.get("attention", "Create a scroll-stopping hook")}
+- [I] Interest: {aida_brief.get("interest", "Highlight the key benefit")}
+- [D] Desire: {aida_brief.get("desire", "Create desire for the product")}
+- [A] Action: {aida_brief.get("action", "Clear CTA")}
+
+Output JSON with exactly 3 variants. Each variant must have a DIFFERENT hook type and approach:
+{{
+  "variants": [
+    {{
+      "hook_type": "question|statistic|contrast|story|bold_claim",
+      "copy_attention": "<[A] hook — first 1-2 lines>",
+      "copy_interest": "<[I] body — pain point or benefit>",
+      "copy_desire": "<[D] value, scene, or emotion>",
+      "copy_action": "<[A] CTA>",
+      "full_copy": "<complete formatted post ready to publish>",
+      "hashtags": ["#tag1", "#tag2"]
+    }}
+  ]
+}}
+
+IMPORTANT: Write ALL copy in {language.upper()}. Make the 3 variants distinctly different from each other."""
 
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-
     message = client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=4096,
-        system=BASE_AIDA_SYSTEM,
-        messages=[{"role": "user", "content": user_content}],
+        max_tokens=3000,
+        system=system,
+        messages=[{"role": "user", "content": user}],
     )
 
     raw = message.content[0].text.strip()
-    if raw.startswith("```json"):
-        raw = raw[7:]
-    if raw.startswith("```"):
-        raw = raw[3:]
+    for prefix in ["```json", "```"]:
+        if raw.startswith(prefix):
+            raw = raw[len(prefix):]
     if raw.endswith("```"):
         raw = raw[:-3]
 
     result = json.loads(raw.strip())
     variants = result.get("variants", [])
 
-    # Run compliance check on each variant
-    for variant in variants:
-        copy_text = variant.get("full_copy", "")
-        hashtags = variant.get("hashtags", [])
-        title = variant.get("title")
-        variant["compliance"] = check_compliance(platform, copy_text, hashtags, title)
+    if not variants:
+        raise ValueError("No copy variants returned from Claude")
 
-    logger.info("Generated %d copy variants for platform=%s theme='%s'", len(variants), platform, theme)
-    return {"variants": variants, "platform": platform, "theme": theme}
+    # Use first variant as the primary, store all 3
+    primary = variants[0]
+    compliance = check_compliance(platform, primary.get("full_copy", ""), primary.get("hashtags", []))
+
+    return {
+        "copy_attention": primary.get("copy_attention", ""),
+        "copy_interest": primary.get("copy_interest", ""),
+        "copy_desire": primary.get("copy_desire", ""),
+        "copy_action": primary.get("copy_action", ""),
+        "copy_text": primary.get("full_copy", ""),
+        "hashtags": primary.get("hashtags", []),
+        "copy_variants": variants,
+        "platform_compliance": compliance,
+        "language": language,
+        "content_style": content_style,
+    }

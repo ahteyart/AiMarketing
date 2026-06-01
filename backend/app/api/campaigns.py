@@ -18,6 +18,7 @@ class CampaignCreate(BaseModel):
     target_platforms: list[str] = ["instagram", "facebook", "xiaohongshu"]
     keywords: list[str] = []
     brand_context: dict | None = None
+    language: str = "english"
 
 
 class CampaignResponse(BaseModel):
@@ -28,6 +29,7 @@ class CampaignResponse(BaseModel):
     target_platforms: list[str] | None
     keywords: list[str] | None
     status: str
+    language: str
 
     class Config:
         from_attributes = True
@@ -60,7 +62,7 @@ async def update_campaign(campaign_id: UUID, body: dict, db: AsyncSession = Depe
     campaign = await db.get(Campaign, campaign_id)
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
-    allowed_fields = {"name", "brand_voice", "target_audience", "target_platforms", "keywords", "brand_context", "status"}
+    allowed_fields = {"name", "brand_voice", "target_audience", "target_platforms", "keywords", "brand_context", "status", "language"}
     for key, value in body.items():
         if key in allowed_fields:
             setattr(campaign, key, value)
