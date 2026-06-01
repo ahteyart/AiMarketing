@@ -25,9 +25,6 @@ boto3==1.35.84
 # AI
 anthropic==0.40.0
 
-# Video generation
-runwayml==0.3.0
-
 # Social media scraping
 apify-client==1.9.2
 playwright==1.49.1
@@ -49,4 +46,3 @@ tenacity==9.0.0
 # Dev
 pytest==8.3.4
 pytest-asyncio==0.25.0
-httpx==0.28.1
