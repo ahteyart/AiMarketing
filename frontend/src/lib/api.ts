@@ -1,7 +1,5 @@
 import axios from "axios";
 
-// In production (Vercel): same domain, so relative /api works
-// In development: point to local FastAPI server
 const API_URL = process.env.NEXT_PUBLIC_API_URL || (typeof window !== "undefined" && window.location.hostname !== "localhost" ? "" : "http://localhost:8000");
 
 export const api = axios.create({
@@ -14,14 +12,6 @@ export const getCampaigns = () => api.get("/campaigns/").then((r) => r.data);
 export const createCampaign = (data: object) => api.post("/campaigns/", data).then((r) => r.data);
 export const getCampaign = (id: string) => api.get(`/campaigns/${id}`).then((r) => r.data);
 export const updateCampaign = (id: string, data: object) => api.patch(`/campaigns/${id}`, data).then((r) => r.data);
-
-// ── Research ───────────────────────────────────────────────
-export const getResearchPosts = (campaignId: string, platform?: string) =>
-  api.get(`/research/${campaignId}`, { params: { platform } }).then((r) => r.data);
-export const getTrendingTopics = (campaignId: string) =>
-  api.get(`/research/${campaignId}/topics`).then((r) => r.data);
-export const triggerResearch = (campaignId: string, keywords?: string[]) =>
-  api.post("/research/trigger", { campaign_id: campaignId, keywords }).then((r) => r.data);
 
 // ── 30-Day Planner ─────────────────────────────────────────
 export const getCalendar = (campaignId: string, platform?: string) =>
@@ -51,8 +41,8 @@ export const approveContent = (contentId: string, editedCopy?: string, notes?: s
 export const rejectContent = (contentId: string, reason: string) =>
   api.post(`/approvals/${contentId}/reject`, { reason }).then((r) => r.data);
 
-// ── Google Sheets Export ───────────────────────────────────
+// ── Google Drive + Sheets Export ───────────────────────────
 export const startGoogleAuth = (campaignId: string) =>
-  api.get("/export/google-sheets/auth", { params: { campaign_id: campaignId } }).then((r) => r.data);
-export const exportToSheets = (campaignId: string, credentials: object, spreadsheetId?: string) =>
-  api.post("/export/google-sheets", { campaign_id: campaignId, credentials, spreadsheet_id: spreadsheetId }).then((r) => r.data);
+  api.get("/export/google/auth", { params: { campaign_id: campaignId } }).then((r) => r.data);
+export const exportToGoogle = (campaignId: string, credentials: object, spreadsheetId?: string) =>
+  api.post("/export/google", { campaign_id: campaignId, credentials, spreadsheet_id: spreadsheetId, upload_to_drive: true }).then((r) => r.data);

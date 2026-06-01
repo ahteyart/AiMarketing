@@ -1,15 +1,14 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BarChart2, Calendar, CheckSquare, FileSpreadsheet, Search, Zap } from "lucide-react";
+import { BarChart2, Calendar, CheckSquare, FolderOpen, Zap } from "lucide-react";
 import clsx from "clsx";
 
 const navItems = [
   { href: "/", label: "概览", icon: BarChart2 },
-  { href: "/trends", label: "热门调研", icon: Search },
   { href: "/calendar", label: "30天日历", icon: Calendar },
   { href: "/approval", label: "待审批", icon: CheckSquare },
-  { href: "/export", label: "导出 Sheets", icon: FileSpreadsheet },
+  { href: "/export", label: "Drive & Sheets", icon: FolderOpen },
 ];
 
 export function Sidebar() {

@@ -1,20 +1,20 @@
 "use client";
 import Link from "next/link";
-import { Search, Calendar, CheckSquare, FileSpreadsheet, ArrowRight } from "lucide-react";
+import { Calendar, CheckSquare, FolderOpen, Zap, ArrowRight } from "lucide-react";
 
 const steps = [
   {
     number: "01",
-    title: "调研热门内容",
-    description: "从 Instagram、Facebook、TikTok、小红书抓取高互动帖子，分析趋势",
-    icon: Search,
-    href: "/trends",
+    title: "创建 Campaign",
+    description: "输入品牌信息、目标受众、内容关键词，AI 自动规划 30 天内容日历",
+    icon: Zap,
+    href: "/calendar",
     color: "bg-blue-50 text-blue-600 border-blue-200",
   },
   {
     number: "02",
-    title: "AI 规划30天日历",
-    description: "基于调研数据，Claude 自动生成30天内容日历，符合各平台 AIDA 结构",
+    title: "AI 生成内容",
+    description: "基于 AIDA 模型自动生成各平台文案 + 图片设计（视频按需生成）",
     icon: Calendar,
     href: "/calendar",
     color: "bg-purple-50 text-purple-600 border-purple-200",
@@ -29,9 +29,9 @@ const steps = [
   },
   {
     number: "04",
-    title: "导出 Google Sheets",
-    description: "批准后一键导出到 Google Sheets，按平台分 Tab，颜色标注状态",
-    icon: FileSpreadsheet,
+    title: "导出 Drive & Sheets",
+    description: "批准后一键上传图片/视频到 Google Drive，文案日历写入 Sheets，按平台分 Tab",
+    icon: FolderOpen,
     href: "/export",
     color: "bg-orange-50 text-orange-600 border-orange-200",
   },
@@ -42,7 +42,7 @@ export default function HomePage() {
     <div className="max-w-4xl mx-auto">
       <div className="mb-8">
         <h1 className="text-2xl font-bold text-gray-900 mb-2">AI 营销内容自动化</h1>
-        <p className="text-gray-500">从调研到30天内容日历，AI 生成符合 AIDA 结构的文案和图片，审批后导出到 Google Sheets</p>
+        <p className="text-gray-500">从创建 Campaign 到30天内容日历，AI 生成符合 AIDA 结构的文案和图片，审批后导出到 Google Drive & Sheets</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">

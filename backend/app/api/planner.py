@@ -9,7 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.models.calendar_entry import CalendarEntry
 from app.models.campaign import Campaign
-from app.models.research import ResearchPost
 from app.planner.calendar_generator import generate_30_day_calendar
 
 router = APIRouter(prefix="/planner", tags=["planner"])
@@ -109,22 +108,7 @@ async def _generate_calendar_task(
 
     async with AsyncSessionLocal() as db:
         try:
-            # Fetch recent research posts to feed into the calendar generator
-            result = await db.execute(
-                select(ResearchPost)
-                .where(ResearchPost.campaign_id == campaign_id)
-                .order_by(ResearchPost.engagement_score.desc())
-                .limit(50)
-            )
-            research_posts = [
-                {
-                    "platform": p.platform,
-                    "caption": p.caption,
-                    "hashtags": p.hashtags,
-                    "engagement_score": p.engagement_score,
-                }
-                for p in result.scalars().all()
-            ]
+            research_posts: list[dict] = []
 
             entries = await generate_30_day_calendar(
                 campaign_name=campaign_name,
