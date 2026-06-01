@@ -33,29 +33,6 @@ def upgrade() -> None:
     )
 
     op.create_table(
-        "research_posts",
-        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("campaign_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("campaigns.id"), nullable=False),
-        sa.Column("platform", sa.String(50), nullable=False),
-        sa.Column("external_id", sa.String(255)),
-        sa.Column("content_url", sa.Text()),
-        sa.Column("author_handle", sa.String(255)),
-        sa.Column("caption", sa.Text()),
-        sa.Column("hashtags", postgresql.ARRAY(sa.String())),
-        sa.Column("likes", sa.Integer(), server_default="0"),
-        sa.Column("comments", sa.Integer(), server_default="0"),
-        sa.Column("shares", sa.Integer(), server_default="0"),
-        sa.Column("saves", sa.Integer(), server_default="0"),
-        sa.Column("views", sa.Integer(), server_default="0"),
-        sa.Column("followers", sa.Integer(), server_default="0"),
-        sa.Column("engagement_score", sa.Float(), server_default="0.0"),
-        sa.Column("trend_velocity", sa.Float(), server_default="0.0"),
-        sa.Column("raw_metadata", postgresql.JSONB()),
-        sa.Column("scraped_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.UniqueConstraint("platform", "external_id", name="uq_platform_external_id"),
-    )
-
-    op.create_table(
         "calendar_entries",
         sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column("campaign_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("campaigns.id"), nullable=False),
@@ -129,5 +106,4 @@ def downgrade() -> None:
     op.drop_table("approval_actions")
     op.drop_table("generated_content")
     op.drop_table("calendar_entries")
-    op.drop_table("research_posts")
     op.drop_table("campaigns")

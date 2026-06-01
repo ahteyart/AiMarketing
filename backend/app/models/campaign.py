@@ -25,7 +25,6 @@ class Campaign(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
 
-    research_posts = relationship("ResearchPost", back_populates="campaign", cascade="all, delete-orphan")
     calendar_entries = relationship("CalendarEntry", back_populates="campaign", cascade="all, delete-orphan")
     generated_contents = relationship("GeneratedContent", back_populates="campaign", cascade="all, delete-orphan")
     sheet_exports = relationship("SheetExport", back_populates="campaign", cascade="all, delete-orphan")
