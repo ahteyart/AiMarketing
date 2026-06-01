@@ -1,0 +1,28 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+  }
+  body {
+    @apply text-gray-900;
+  }
+}
+
+@layer utilities {
+  .platform-badge-instagram {
+    @apply bg-pink-100 text-pink-700 border-pink-200;
+  }
+  .platform-badge-facebook {
+    @apply bg-blue-100 text-blue-700 border-blue-200;
+  }
+  .platform-badge-xiaohongshu {
+    @apply bg-red-100 text-red-700 border-red-200;
+  }
+  .platform-badge-tiktok {
+    @apply bg-gray-900 text-white border-gray-700;
+  }
+}
