@@ -34,6 +34,18 @@ class XiaohongshuResearch(ResearchProvider):
         return len(self._cookies) > 0
 
     async def fetch_trending(self, keywords: list[str], limit: int = 20) -> list[RawPost]:
+        # In serverless environments (Vercel), Playwright is unavailable — use Apify directly
+        import os
+        if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+            posts = []
+            for keyword in keywords[:3]:
+                try:
+                    results = await self._apify_fallback(keyword, limit)
+                    posts.extend(results)
+                except Exception as e:
+                    logger.warning("XHS Apify search failed for '%s': %s", keyword, e)
+            return posts
+
         if not self._cookies:
             logger.warning("XHS research unavailable: no XHS cookies configured")
             return []
