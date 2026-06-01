@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { generateCalendar, getCalendar } from "@/lib/api";
 import { Calendar, Sparkles, ChevronRight, Globe, Clock } from "lucide-react";
@@ -63,7 +63,7 @@ function StyleBadge({ style }: { style: string }) {
   );
 }
 
-export default function CalendarPage() {
+function CalendarPageInner() {
   const searchParams = useSearchParams();
   const [campaignId, setCampaignId] = useState(searchParams.get("campaign_id") || "");
   const [language, setLanguage] = useState(searchParams.get("language") || "english");
@@ -298,5 +298,13 @@ export default function CalendarPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function CalendarPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-64 text-gray-400 text-sm">Loading...</div>}>
+      <CalendarPageInner />
+    </Suspense>
   );
 }
