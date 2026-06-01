@@ -9,8 +9,20 @@ from app.config import settings
 
 _is_serverless = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
 
+
+def _normalize_db_url(url: str) -> str:
+    """Ensure URL uses asyncpg driver — Railway gives plain postgresql:// URLs."""
+    if url.startswith("postgres://"):
+        return url.replace("postgres://", "postgresql+asyncpg://", 1)
+    if url.startswith("postgresql://") and "+asyncpg" not in url:
+        return url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    return url
+
+
+_db_url = _normalize_db_url(settings.database_url)
+
 engine = create_async_engine(
-    settings.database_url,
+    _db_url,
     echo=settings.app_debug and not _is_serverless,
     poolclass=NullPool if _is_serverless else None,
     **({} if _is_serverless else {"pool_pre_ping": True, "pool_size": 5, "max_overflow": 10}),
