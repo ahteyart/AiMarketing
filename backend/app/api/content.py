@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.generation.copywriter import generate_copy
+from app.generation.copywriter import generate_aida_copy
 from app.generation.designer import DesignRequest, generate_design
 from app.generation.video_gen import estimate_cost, generate_video_from_image
 from app.models.calendar_entry import CalendarEntry
@@ -103,9 +103,11 @@ async def generate_content(
         campaign_name=campaign.name,
         brand_voice=campaign.brand_voice or "",
         target_audience=campaign.target_audience or "",
+        language=getattr(campaign, "language", "english") or "english",
         platform=entry.platform,
         content_type=entry.content_type,
         theme=entry.theme or "",
+        content_style=entry.content_style or "educational",
         aida_brief=json.loads(entry.aida_brief) if entry.aida_brief else None,
         suggested_hashtags=entry.suggested_hashtags or [],
         generate_image=body.generate_image,
@@ -172,9 +174,11 @@ async def _generate_content_task(
     campaign_name: str,
     brand_voice: str,
     target_audience: str,
+    language: str,
     platform: str,
     content_type: str,
     theme: str,
+    content_style: str,
     aida_brief: dict | None,
     suggested_hashtags: list[str],
     generate_image: bool,
@@ -188,13 +192,14 @@ async def _generate_content_task(
         content = await db.get(GeneratedContent, content_id)
         try:
             # 1. Generate AIDA copy
-            copy_result = await generate_copy(
+            copy_result = await generate_aida_copy(
                 platform=platform,
                 theme=theme,
-                aida_brief=aida_brief,
+                aida_brief=aida_brief or {},
+                content_style=content_style,
+                language=language,
                 brand_voice=brand_voice,
                 target_audience=target_audience,
-                content_type=content_type,
             )
 
             best_variant = copy_result["variants"][0] if copy_result["variants"] else {}
