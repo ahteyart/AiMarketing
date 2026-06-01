@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,8 +14,17 @@ class Settings(BaseSettings):
     app_port: int = 8000
     frontend_url: str = "http://localhost:3000"
 
-    # Database
+    # Database — Railway/Neon provide postgres:// or postgresql://, normalize to asyncpg
     database_url: str = "postgresql+asyncpg://aimarketing:aimarketing@localhost:5432/aimarketing"
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def normalize_db_url(cls, v: str) -> str:
+        if v.startswith("postgres://"):
+            return v.replace("postgres://", "postgresql+asyncpg://", 1)
+        if v.startswith("postgresql://") and "+asyncpg" not in v:
+            return v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return v
 
     # Redis
     redis_url: str = "redis://localhost:6379/0"

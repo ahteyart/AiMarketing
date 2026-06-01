@@ -1,4 +1,5 @@
 import asyncio
+import os
 from logging.config import fileConfig
 
 from alembic import context
@@ -7,10 +8,19 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from app.database import Base
-# Import all models so Alembic can detect them
 from app.models import Campaign, ResearchPost, CalendarEntry, GeneratedContent, ApprovalAction, SheetExport  # noqa: F401
 
 config = context.config
+
+# Override sqlalchemy.url with DATABASE_URL env var (Railway, Neon, etc.)
+_db_url = os.environ.get("DATABASE_URL", "")
+if _db_url:
+    if _db_url.startswith("postgres://"):
+        _db_url = _db_url.replace("postgres://", "postgresql+asyncpg://", 1)
+    elif _db_url.startswith("postgresql://") and "+asyncpg" not in _db_url:
+        _db_url = _db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    config.set_main_option("sqlalchemy.url", _db_url)
+
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 

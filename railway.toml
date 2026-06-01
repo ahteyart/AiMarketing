@@ -1,0 +1,13 @@
+# Railway deployment config for the FastAPI backend
+# In Railway UI: set Root Directory = backend
+
+[build]
+builder = "nixpacks"
+buildCommand = "pip install -r requirements.txt"
+
+[deploy]
+startCommand = "bash start.sh"
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3

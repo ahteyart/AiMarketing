@@ -1,16 +1,19 @@
+import os
 from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.pool import NullPool
 
 from app.config import settings
 
+_is_serverless = bool(os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
+
 engine = create_async_engine(
     settings.database_url,
-    echo=settings.app_debug,
-    pool_pre_ping=True,
-    pool_size=10,
-    max_overflow=20,
+    echo=settings.app_debug and not _is_serverless,
+    poolclass=NullPool if _is_serverless else None,
+    **({} if _is_serverless else {"pool_pre_ping": True, "pool_size": 5, "max_overflow": 10}),
 )
 
 AsyncSessionLocal = async_sessionmaker(
