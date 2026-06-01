@@ -123,8 +123,8 @@ Output JSON with exactly 3 variants. Each variant must have a DIFFERENT hook typ
 
 IMPORTANT: Write ALL copy in {language.upper()}. Make the 3 variants distinctly different from each other."""
 
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-    message = client.messages.create(
+    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    message = await client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=3000,
         system=system,

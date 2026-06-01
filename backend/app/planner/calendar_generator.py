@@ -293,8 +293,8 @@ async def generate_calendar(
         style_assignments=style_assignments,
     )
 
-    client = anthropic.Anthropic(api_key=settings.anthropic_api_key)
-    message = client.messages.create(
+    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    message = await client.messages.create(
         model="claude-sonnet-4-6",
         max_tokens=8192,
         system=system_prompt,
