@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { generateCalendar, getCalendar } from "@/lib/api";
 import { Calendar, Sparkles, ChevronRight, Globe, Clock } from "lucide-react";
 import clsx from "clsx";
@@ -63,9 +64,17 @@ function StyleBadge({ style }: { style: string }) {
 }
 
 export default function CalendarPage() {
-  const [campaignId, setCampaignId] = useState("");
-  const [language, setLanguage] = useState("english");
+  const searchParams = useSearchParams();
+  const [campaignId, setCampaignId] = useState(searchParams.get("campaign_id") || "");
+  const [language, setLanguage] = useState(searchParams.get("language") || "english");
   const [days, setDays] = useState(30);
+
+  useEffect(() => {
+    const id = searchParams.get("campaign_id");
+    if (id) setCampaignId(id);
+    const lang = searchParams.get("language");
+    if (lang) setLanguage(lang);
+  }, [searchParams]);
   const [entries, setEntries] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedPlatform, setSelectedPlatform] = useState("all");
