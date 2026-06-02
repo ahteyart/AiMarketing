@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
-import { generateCalendar, getCalendar } from "@/lib/api";
+import { generateCalendar, getCalendar, getGenerationStatus } from "@/lib/api";
 import { Calendar, Sparkles, ChevronRight, Globe, Clock } from "lucide-react";
 import clsx from "clsx";
 
@@ -77,6 +77,7 @@ function CalendarPageInner() {
   }, [searchParams]);
   const [entries, setEntries] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [genError, setGenError] = useState("");
   const [selectedPlatform, setSelectedPlatform] = useState("all");
   const [pollCount, setPollCount] = useState(0);
 
@@ -84,6 +85,7 @@ function CalendarPageInner() {
     if (!campaignId.trim()) return alert("Please enter a Campaign ID");
     setLoading(true);
     setEntries([]);
+    setGenError("");
     try {
       await generateCalendar(campaignId, undefined, days, language);
       // Poll for results — generation runs in background
@@ -92,6 +94,14 @@ function CalendarPageInner() {
         attempts++;
         setPollCount(attempts);
         try {
+          // Check generation status first for fast error detection
+          const status = await getGenerationStatus(campaignId);
+          if (status.status === "error") {
+            setLoading(false);
+            clearInterval(poll);
+            setGenError(status.message || "Generation failed. Check that ANTHROPIC_API_KEY is set in Railway.");
+            return;
+          }
           const data = await getCalendar(campaignId);
           if (data && data.length > 0) {
             setEntries(data);
@@ -99,14 +109,14 @@ function CalendarPageInner() {
             clearInterval(poll);
           }
         } catch {}
-        if (attempts >= 24) { // 2 min timeout
+        if (attempts >= 36) { // 3 min timeout
           setLoading(false);
           clearInterval(poll);
-          alert("Generation is taking longer than expected. Try refreshing.");
+          setGenError("Generation is taking longer than expected. Check Railway logs for errors.");
         }
       }, 5000);
     } catch (e: any) {
-      alert(e.response?.data?.detail || "Generation failed");
+      setGenError(e.response?.data?.detail || "Generation failed");
       setLoading(false);
     }
   };
@@ -198,6 +208,11 @@ function CalendarPageInner() {
             ? `Generating... (${pollCount * 5}s)`
             : `Generate ${days}-Day Calendar in ${LANGUAGES.find(l => l.value === language)?.label}`}
         </button>
+        {genError && (
+          <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+            <strong>Error:</strong> {genError}
+          </div>
+        )}
       </div>
 
       {/* Platform filter */}

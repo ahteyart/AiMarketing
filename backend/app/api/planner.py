@@ -13,6 +13,9 @@ from app.planner.calendar_generator import generate_calendar
 
 router = APIRouter(prefix="/planner", tags=["planner"])
 
+# In-memory generation status tracker {campaign_id: {"status": "generating|done|error", "message": ""}}
+_generation_status: dict[str, dict] = {}
+
 
 class GenerateCalendarRequest(BaseModel):
     campaign_id: UUID
@@ -69,6 +72,7 @@ async def generate_calendar_endpoint(
     language = body.language or getattr(campaign, "language", "english") or "english"
     days = max(1, min(body.days, 30))
 
+    _generation_status[str(body.campaign_id)] = {"status": "generating", "message": ""}
     background_tasks.add_task(
         _generate_calendar_task,
         body.campaign_id,
@@ -87,6 +91,14 @@ async def generate_calendar_endpoint(
         "language": language,
         "platforms": platforms,
     }
+
+
+@router.get("/{campaign_id}/generation-status")
+async def get_generation_status(campaign_id: UUID):
+    status = _generation_status.get(str(campaign_id))
+    if not status:
+        return {"status": "idle"}
+    return status
 
 
 @router.patch("/entry/{entry_id}", response_model=CalendarEntryResponse)
@@ -163,6 +175,9 @@ async def _generate_calendar_task(
             await db.commit()
             logger.info("Calendar done: %d entries, campaign %s (%s, %dd)", len(entries), campaign_id, language, days)
 
+            _generation_status[str(campaign_id)] = {"status": "done", "message": f"{len(entries)} entries"}
+
         except Exception as e:
-            logger.error("Calendar generation failed for %s: %s", campaign_id, e)
+            logger.error("Calendar generation failed for %s: %s", campaign_id, e, exc_info=True)
+            _generation_status[str(campaign_id)] = {"status": "error", "message": str(e)}
             await db.rollback()
