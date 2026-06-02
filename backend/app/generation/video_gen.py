@@ -46,7 +46,13 @@ async def generate_video_from_image(
                 },
                 headers=_headers(),
             )
-            resp.raise_for_status()
+            if not resp.is_success:
+                logger.error(
+                    "Higgsfield %s error — body: %s",
+                    resp.status_code,
+                    resp.text[:500],
+                )
+                return {"error": f"Higgsfield API error {resp.status_code}: {resp.text[:200]}", "job_id": None}
             data = resp.json()
 
         return {

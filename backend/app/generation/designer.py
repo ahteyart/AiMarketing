@@ -5,6 +5,7 @@ so DALL-E can generate a visually consistent result.
 """
 
 import logging
+import re
 from dataclasses import dataclass
 
 import httpx
@@ -15,6 +16,14 @@ logger = logging.getLogger(__name__)
 
 OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions"
 OPENAI_IMAGE_URL = "https://api.openai.com/v1/images/generations"
+
+
+def _to_ascii_safe(text: str, max_len: int = 120) -> str:
+    """Strip non-ASCII characters so DALL-E won't try to render CJK text in the image."""
+    ascii_only = re.sub(r"[^\x00-\x7F]+", " ", text).strip()
+    ascii_only = re.sub(r"\s+", " ", ascii_only)
+    return ascii_only[:max_len] if ascii_only else ""
+
 
 PLATFORM_SIZE = {
     ("instagram", "image_post"):   "1024x1024",
@@ -73,15 +82,19 @@ async def _describe_reference_image(image_url: str, headers: dict) -> str:
 
 def _build_prompt(request: DesignRequest, reference_description: str = "") -> str:
     colors = ", ".join(request.brand_colors) if request.brand_colors else "vibrant brand colors"
+    # Strip non-ASCII to prevent DALL-E from rendering CJK glyphs in the image
+    safe_theme = _to_ascii_safe(request.theme, 100)
+    safe_attention = _to_ascii_safe(request.copy_attention, 100)
+    concept = safe_attention or safe_theme or "lifestyle marketing"
     base = (
-        f"Professional {request.platform} marketing image. "
-        f"Theme: {request.theme}. "
-        f"Headline concept: {request.copy_attention[:120]}. "
+        f"Professional {request.platform} marketing photo, clean studio composition. "
+        f"Theme: {safe_theme or 'lifestyle product'}. "
+        f"Concept: {concept}. "
         f"Style: {request.brand_style}, {colors}. "
-        f"High quality, clean composition, no text overlays."
+        f"High-quality photography, no text, no words, no letters in the image."
     )
     if reference_description:
-        base += f" Reference subject: {reference_description}"
+        base += f" Featured subject: {reference_description}"
     return base
 
 
@@ -104,6 +117,8 @@ async def generate_design(request: DesignRequest, **_) -> DesignResult:
 
     prompt = _build_prompt(request, reference_description)
 
+    logger.info("DALL-E prompt (%s chars): %s", len(prompt), prompt[:200])
+
     try:
         async with httpx.AsyncClient(timeout=60) as client:
             resp = await client.post(
@@ -111,7 +126,13 @@ async def generate_design(request: DesignRequest, **_) -> DesignResult:
                 json={"model": "dall-e-3", "prompt": prompt, "n": 1, "size": size, "quality": "standard"},
                 headers=headers,
             )
-            resp.raise_for_status()
+            if not resp.is_success:
+                logger.error(
+                    "DALL-E %s error — body: %s",
+                    resp.status_code,
+                    resp.text[:500],
+                )
+                return placeholder
             image_url = resp.json()["data"][0]["url"]
 
         return DesignResult(
