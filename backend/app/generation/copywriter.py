@@ -96,6 +96,9 @@ async def generate_aida_copy(
 
     if selected_hook:
         # Body-only mode: hook is already chosen, generate 2 body variants
+        # Safely escape the hook for JSON embedding
+        escaped_hook = json.dumps(selected_hook)[1:-1]  # Remove surrounding quotes
+
         user = f"""The user has already selected this opening hook for their {platform.upper()} post:
 
 CHOSEN HOOK (copy_attention): "{selected_hook}"
@@ -117,17 +120,25 @@ Output JSON with exactly 2 body variants. The chosen hook must be the opening of
 {{
   "variants": [
     {{
-      "copy_attention": "{selected_hook}",
+      "copy_attention": "{escaped_hook}",
       "copy_interest": "<[I] body — pain point or benefit>",
       "copy_desire": "<[D] value, scene, or emotion>",
       "copy_action": "<[A] CTA>",
       "full_copy": "<chosen hook>\\n\\n<interest>\\n<desire>\\n\\n<action>",
       "hashtags": ["#tag1", "#tag2"]
+    }},
+    {{
+      "copy_attention": "{escaped_hook}",
+      "copy_interest": "<[I] alternative approach — different angle or framing>",
+      "copy_desire": "<[D] alternative value proposition or emotional appeal>",
+      "copy_action": "<[A] different CTA>",
+      "full_copy": "<chosen hook>\\n\\n<alternative interest>\\n<alternative desire>\\n\\n<alternative action>",
+      "hashtags": ["#tag3", "#tag4"]
     }}
   ]
 }}
 
-IMPORTANT: Write ALL body copy in {language.upper()}. Make the 2 variants distinctly different in their body approach."""
+IMPORTANT: Write ALL body copy in {language.upper()}. Make the 2 variants distinctly different in their body approach. Return valid JSON only."""
 
         max_tokens = 1800
 
@@ -184,7 +195,11 @@ IMPORTANT: Write ALL copy in {language.upper()}. Make the 3 variants distinctly 
     if raw.endswith("```"):
         raw = raw[:-3]
 
-    result = json.loads(raw.strip())
+    try:
+        result = json.loads(raw.strip())
+    except json.JSONDecodeError as e:
+        logger.error("JSON parse error in copywriter response: %s. Raw response: %s", e, raw[:500])
+        raise ValueError(f"Invalid JSON from Claude: {e}") from e
     variants = result.get("variants", [])
 
     if not variants:
