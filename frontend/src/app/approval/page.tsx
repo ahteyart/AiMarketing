@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
-import { getPendingApprovals, approveContent, rejectContent, generateImage } from "@/lib/api";
-import { CheckCircle, XCircle, Edit3, AlertTriangle, Eye, Zap } from "lucide-react";
+import { getPendingApprovals, approveContent, rejectContent, generateImage, requestVideoGeneration } from "@/lib/api";
+import { CheckCircle, XCircle, Edit3, AlertTriangle, Eye, Zap, Film } from "lucide-react";
 import clsx from "clsx";
 
 const PLATFORM_LABELS: Record<string, string> = {
@@ -37,6 +37,7 @@ export default function ApprovalPage() {
   const [processing, setProcessing] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState<Record<string, string>>({});
   const [generatingImage, setGeneratingImage] = useState<string | null>(null);
+  const [mediaMode, setMediaMode] = useState<Record<string, "image" | "video">({});
 
   useEffect(() => {
     getPendingApprovals()
@@ -66,10 +67,15 @@ export default function ApprovalPage() {
     }
   };
 
-  const handleGenerateImage = async (id: string) => {
+  const handleGenerateMedia = async (id: string) => {
+    const mode = mediaMode[id] || "image";
     setGeneratingImage(id);
     try {
-      await generateImage(id);
+      if (mode === "image") {
+        await generateImage(id);
+      } else {
+        await requestVideoGeneration(id, true);
+      }
       const updated = await getPendingApprovals();
       setItems(updated.items || []);
     } finally {
@@ -119,13 +125,47 @@ export default function ApprovalPage() {
                       <div className="w-full h-40 rounded-lg bg-gray-100 flex items-center justify-center text-gray-400 mb-3">
                         <Eye size={24} />
                       </div>
-                      <button
-                        onClick={() => handleGenerateImage(item.id)}
-                        disabled={generatingImage === item.id}
-                        className="w-full flex items-center justify-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm py-2 rounded-lg border border-indigo-200 transition-colors disabled:opacity-50 mb-3"
-                      >
-                        <Zap size={14} /> {generatingImage === item.id ? "生成中..." : "生成图片"}
-                      </button>
+                      <div className="mb-3">
+                        <div className="flex gap-2 mb-2">
+                          <label className="flex items-center gap-1.5 flex-1 cursor-pointer">
+                            <input
+                              type="radio"
+                              name={`media-${item.id}`}
+                              value="image"
+                              checked={(mediaMode[item.id] || "image") === "image"}
+                              onChange={() => setMediaMode((prev) => ({ ...prev, [item.id]: "image" }))}
+                              className="w-3.5 h-3.5 cursor-pointer"
+                            />
+                            <span className="text-sm text-gray-700">设计图片</span>
+                          </label>
+                          <label className="flex items-center gap-1.5 flex-1 cursor-pointer">
+                            <input
+                              type="radio"
+                              name={`media-${item.id}`}
+                              value="video"
+                              checked={(mediaMode[item.id] || "image") === "video"}
+                              onChange={() => setMediaMode((prev) => ({ ...prev, [item.id]: "video" }))}
+                              className="w-3.5 h-3.5 cursor-pointer"
+                            />
+                            <span className="text-sm text-gray-700">UGC 视频</span>
+                          </label>
+                        </div>
+                        <button
+                          onClick={() => handleGenerateMedia(item.id)}
+                          disabled={generatingImage === item.id}
+                          className="w-full flex items-center justify-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm py-2 rounded-lg border border-indigo-200 transition-colors disabled:opacity-50"
+                        >
+                          {(mediaMode[item.id] || "image") === "image" ? (
+                            <>
+                              <Zap size={14} /> {generatingImage === item.id ? "生成中..." : "生成图片"}
+                            </>
+                          ) : (
+                            <>
+                              <Film size={14} /> {generatingImage === item.id ? "生成中..." : "生成视频"}
+                            </>
+                          )}
+                        </button>
+                      </div>
                     </div>
                   )}
                   <div className="space-y-1">
