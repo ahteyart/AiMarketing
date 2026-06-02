@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.database import get_db
 from app.generation.copywriter import generate_aida_copy
 from app.generation.designer import DesignRequest, generate_design
-from app.generation.video_gen import estimate_cost, generate_video_from_image
+from app.generation.video_gen import estimate_cost, generate_video_from_image, get_video_status
 from app.models.calendar_entry import CalendarEntry
 from app.models.campaign import Campaign
 from app.models.content import GeneratedContent
@@ -198,6 +198,31 @@ async def request_video_generation(
     await db.flush()
 
     return {"job_id": result.get("job_id"), "status": result.get("status"), "cost": cost_info}
+
+
+@router.get("/item/{content_id}/video-status")
+async def check_video_status(
+    content_id: UUID,
+    db: AsyncSession = Depends(get_db),
+):
+    """Poll Higgsfield for the video job status for a content item."""
+    content = await db.get(GeneratedContent, content_id)
+    if not content:
+        raise HTTPException(status_code=404, detail="Content not found")
+
+    video_job = (content.generation_metadata or {}).get("video_job", {})
+    job_id = video_job.get("job_id")
+    if not job_id:
+        raise HTTPException(status_code=404, detail="No video job found for this content item")
+
+    status = await get_video_status(job_id)
+
+    if status.get("video_url") and status.get("status") == "completed":
+        content.video_url = status["video_url"]
+        content.generation_metadata = {**content.generation_metadata, "video_job": {**video_job, **status}}
+        await db.flush()
+
+    return status
 
 
 async def _generate_content_task(
