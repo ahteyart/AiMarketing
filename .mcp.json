@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "higgsfield": {
+      "command": "npx",
+      "args": ["-y", "higgsfield-mcp"],
+      "env": {
+        "HF_API_KEY": "",
+        "HF_SECRET": ""
+      }
+    }
+  }
+}

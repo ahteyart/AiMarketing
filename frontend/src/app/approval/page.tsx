@@ -126,46 +126,40 @@ export default function ApprovalPage() {
                         <Eye size={24} />
                       </div>
                       <div className="mb-3">
-                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 mb-2">
-                          <p className="text-xs text-amber-800 mb-2">
-                            需要配置以下项才能生成媒体：
-                          </p>
-                          <ul className="text-xs text-amber-700 space-y-1 ml-3">
-                            <li>• 设计图片：支持多种后端</li>
-                            <li>• UGC 视频：Higgsfield MCP (已集成)</li>
-                          </ul>
-                        </div>
                         <div className="flex gap-2 mb-2">
-                          <label className="flex items-center gap-1.5 flex-1 cursor-pointer opacity-50">
+                          <label className="flex items-center gap-1.5 flex-1 cursor-pointer">
                             <input
                               type="radio"
                               name={`media-${item.id}`}
                               value="image"
                               checked={(mediaMode[item.id] || "image") === "image"}
                               onChange={() => setMediaMode((prev) => ({ ...prev, [item.id]: "image" }))}
-                              className="w-3.5 h-3.5 cursor-pointer"
-                              disabled
+                              className="w-3.5 h-3.5 cursor-pointer accent-indigo-600"
                             />
-                            <span className="text-sm text-gray-700">设计图片</span>
+                            <span className="text-sm text-gray-700">🎨 Canva 设计图</span>
                           </label>
-                          <label className="flex items-center gap-1.5 flex-1 cursor-pointer opacity-50">
+                          <label className="flex items-center gap-1.5 flex-1 cursor-pointer">
                             <input
                               type="radio"
                               name={`media-${item.id}`}
                               value="video"
                               checked={(mediaMode[item.id] || "image") === "video"}
                               onChange={() => setMediaMode((prev) => ({ ...prev, [item.id]: "video" }))}
-                              className="w-3.5 h-3.5 cursor-pointer"
-                              disabled
+                              className="w-3.5 h-3.5 cursor-pointer accent-indigo-600"
                             />
-                            <span className="text-sm text-gray-700">UGC 视频</span>
+                            <span className="text-sm text-gray-700">🎬 Higgsfield 视频</span>
                           </label>
                         </div>
                         <button
-                          disabled={true}
-                          className="w-full flex items-center justify-center gap-1.5 bg-gray-100 text-gray-400 text-sm py-2 rounded-lg border border-gray-200 cursor-not-allowed"
+                          onClick={() => handleGenerateMedia(item.id)}
+                          disabled={generatingImage === item.id}
+                          className="w-full flex items-center justify-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm py-2 rounded-lg border border-indigo-200 transition-colors disabled:opacity-50"
                         >
-                          <Zap size={14} /> 配置 API 后启用
+                          {(mediaMode[item.id] || "image") === "image" ? (
+                            <><Zap size={14} /> {generatingImage === item.id ? "生成中..." : "生成 Canva 设计图"}</>
+                          ) : (
+                            <><Film size={14} /> {generatingImage === item.id ? "生成中..." : "生成 UGC 视频"}</>
+                          )}
                         </button>
                       </div>
                     </div>

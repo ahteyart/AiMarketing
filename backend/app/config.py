@@ -28,8 +28,15 @@ class Settings(BaseSettings):
 
     # AI
     anthropic_api_key: str = ""
-    runway_api_key: str = ""
-    video_generation_monthly_budget_usd: float = 200.0
+
+    # Canva Connect API — https://www.canva.com/developers/
+    # Create an app at canva.com/developers, enable client_credentials grant
+    canva_client_id: str = ""
+    canva_client_secret: str = ""
+
+    # Higgsfield — https://cloud.higgsfield.ai/api-keys
+    hf_api_key: str = ""
+    hf_secret: str = ""
 
     # Google Sheets + Drive
     google_client_id: str = ""

@@ -1,40 +1,58 @@
 """
-UGC video generation using Higgsfield MCP.
+UGC video generation using Higgsfield AI.
+Docs: https://cloud.higgsfield.ai
 Only triggered on explicit user request (never automatic).
-Higgsfield generates authentic, engaging short-form videos.
 """
 
 import logging
 
+import httpx
+
+from app.config import settings
+
 logger = logging.getLogger(__name__)
+
+HIGGSFIELD_API_BASE = "https://api.higgsfield.ai/v1"
+
+
+def _headers() -> dict:
+    return {
+        "X-API-Key": settings.hf_api_key,
+        "X-API-Secret": settings.hf_secret,
+        "Content-Type": "application/json",
+    }
 
 
 async def generate_video_from_image(
     image_url: str,
     motion_prompt: str,
     duration_seconds: int = 5,
-    higgsfield_mcp=None,
 ) -> dict:
-    """
-    Generate a short UGC-style video from a static image using Higgsfield MCP.
-    Returns job info; caller must poll for completion.
-    """
-    if higgsfield_mcp is None:
-        return {"error": "Higgsfield MCP not available", "job_id": None}
+    """Generate a UGC-style video from an image using Higgsfield."""
+    if not settings.hf_api_key or not settings.hf_secret:
+        return {"error": "Higgsfield API credentials not configured", "job_id": None}
 
-    logger.info("Initiating UGC video generation: duration=%ds via Higgsfield", duration_seconds)
+    logger.info("Starting Higgsfield video generation: %ds", duration_seconds)
 
     try:
-        result = await higgsfield_mcp.generate_video(
-            image_url=image_url,
-            prompt=motion_prompt,
-            duration=duration_seconds,
-        )
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(
+                f"{HIGGSFIELD_API_BASE}/video/generate",
+                json={
+                    "image_url": image_url,
+                    "prompt": motion_prompt,
+                    "duration": duration_seconds,
+                    "aspect_ratio": "9:16",
+                },
+                headers=_headers(),
+            )
+            resp.raise_for_status()
+            data = resp.json()
 
         return {
-            "job_id": result.get("video_id") or result.get("id"),
-            "status": result.get("status", "processing"),
-            "video_url": result.get("video_url"),
+            "job_id": data.get("id") or data.get("job_id"),
+            "status": data.get("status", "processing"),
+            "video_url": data.get("video_url"),
             "duration_seconds": duration_seconds,
         }
 
@@ -43,31 +61,40 @@ async def generate_video_from_image(
         return {"error": str(e), "job_id": None}
 
 
-async def get_video_status(job_id: str, higgsfield_mcp=None) -> dict:
+async def get_video_status(job_id: str) -> dict:
     """Poll Higgsfield for video generation status."""
-    if higgsfield_mcp is None:
-        return {"job_id": job_id, "status": "error", "error": "MCP not available"}
+    if not settings.hf_api_key:
+        return {"job_id": job_id, "status": "error", "error": "Not configured"}
 
     try:
-        result = await higgsfield_mcp.get_video_status(job_id)
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.get(
+                f"{HIGGSFIELD_API_BASE}/video/{job_id}",
+                headers=_headers(),
+            )
+            resp.raise_for_status()
+            data = resp.json()
+
         return {
             "job_id": job_id,
-            "status": result.get("status"),
-            "video_url": result.get("video_url"),
-            "progress": result.get("progress", 0),
-            "error": result.get("error"),
+            "status": data.get("status"),
+            "video_url": data.get("video_url"),
+            "progress": data.get("progress", 0),
+            "error": data.get("error"),
         }
 
     except Exception as e:
-        logger.error("Failed to get video status: %s", e)
+        logger.error("Higgsfield status check failed: %s", e)
         return {"job_id": job_id, "status": "error", "error": str(e)}
 
 
 def estimate_cost(duration_seconds: int = 5) -> dict:
-    """Return cost estimate before generating."""
+    credits = duration_seconds * 10
+    usd = credits / 16
     return {
-        "provider": "Higgsfield MCP",
+        "provider": "Higgsfield AI",
         "duration_seconds": duration_seconds,
-        "estimated_cost_usd": 0,
-        "warning": "Higgsfield video generation will be triggered. No additional cost.",
+        "estimated_credits": credits,
+        "estimated_cost_usd": round(usd, 2),
+        "warning": f"~{credits} credits (≈${usd:.2f}). Confirm before proceeding.",
     }
