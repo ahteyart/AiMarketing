@@ -99,6 +99,26 @@ def _build_prompt(request: DesignRequest, reference_description: str = "") -> st
     return base
 
 
+async def _call_dalle(prompt: str, size: str, headers: dict, model: str = "dall-e-3") -> str | None:
+    """Call DALL-E and return the image URL, or None on failure."""
+    # DALL-E 2 only supports up to 1024x1024
+    if model == "dall-e-2" and size not in ("256x256", "512x512", "1024x1024"):
+        size = "1024x1024"
+    body: dict = {"model": model, "prompt": prompt, "n": 1, "size": size}
+    if model == "dall-e-3":
+        body["quality"] = "standard"
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(OPENAI_IMAGE_URL, json=body, headers=headers)
+        if not resp.is_success:
+            logger.error("DALL-E %s (%s) error — body: %s", model, resp.status_code, resp.text[:500])
+            return None
+        return resp.json()["data"][0]["url"]
+    except Exception as e:
+        logger.error("DALL-E %s exception: %s", model, e)
+        return None
+
+
 async def generate_design(request: DesignRequest, **_) -> DesignResult:
     placeholder = DesignResult(
         design_id=None, export_url=None, thumbnail_url=None,
@@ -117,37 +137,26 @@ async def generate_design(request: DesignRequest, **_) -> DesignResult:
         reference_description = await _describe_reference_image(request.product_image_url, headers)
 
     prompt = _build_prompt(request, reference_description)
-
     logger.info("DALL-E prompt (%s chars): %s", len(prompt), prompt[:200])
 
-    try:
-        async with httpx.AsyncClient(timeout=60) as client:
-            resp = await client.post(
-                OPENAI_IMAGE_URL,
-                json={"model": "dall-e-3", "prompt": prompt, "n": 1, "size": size, "quality": "standard"},
-                headers=headers,
-            )
-            if not resp.is_success:
-                logger.error(
-                    "DALL-E %s error — body: %s",
-                    resp.status_code,
-                    resp.text[:500],
-                )
-                return placeholder
-            dalle_url = resp.json()["data"][0]["url"]
-
-        # Burn the headline onto the image and store permanently in MinIO
-        headline = request.copy_attention or request.theme
-        final_url = await overlay_headline_and_upload(dalle_url, headline) or dalle_url
-
-        return DesignResult(
-            design_id=None,
-            export_url=final_url,
-            thumbnail_url=final_url,
-            platform=request.platform,
-            content_type=request.content_type,
-        )
-
-    except Exception as e:
-        logger.error("DALL-E image generation failed: %s", e)
+    # Try DALL-E 3 first; fall back to DALL-E 2 if the account doesn't have access
+    dalle_url = await _call_dalle(prompt, size, headers, model="dall-e-3")
+    if not dalle_url:
+        logger.info("DALL-E 3 failed — retrying with dall-e-2")
+        dalle_url = await _call_dalle(prompt, size, headers, model="dall-e-2")
+    if not dalle_url:
         return placeholder
+
+    # Use ASCII-safe headline for overlay (CJK text can't render without CJK fonts)
+    safe_headline = _to_ascii_safe(request.copy_attention or request.theme, 120)
+    if not safe_headline:
+        safe_headline = f"{request.platform.title()} Marketing"
+    final_url = await overlay_headline_and_upload(dalle_url, safe_headline) or dalle_url
+
+    return DesignResult(
+        design_id=None,
+        export_url=final_url,
+        thumbnail_url=final_url,
+        platform=request.platform,
+        content_type=request.content_type,
+    )
