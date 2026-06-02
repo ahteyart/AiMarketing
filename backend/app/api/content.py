@@ -142,6 +142,35 @@ async def update_content(content_id: UUID, body: dict, db: AsyncSession = Depend
     return content
 
 
+@router.post("/item/{content_id}/generate-image")
+async def generate_image(
+    content_id: UUID,
+    background_tasks: BackgroundTasks,
+    db: AsyncSession = Depends(get_db),
+):
+    """Trigger design/image generation for approved content."""
+    content = await db.get(GeneratedContent, content_id)
+    if not content:
+        raise HTTPException(status_code=404, detail="Content not found")
+
+    if not content.copy_text:
+        raise HTTPException(status_code=400, detail="No copy text available. Generate copy first.")
+
+    # Look up calendar entry for theme
+    entry = await db.get(CalendarEntry, content.calendar_entry_id) if content.calendar_entry_id else None
+
+    background_tasks.add_task(
+        _generate_image_task,
+        content_id=content_id,
+        platform=content.platform,
+        content_type=content.content_type,
+        theme=entry.theme if entry else content.copy_attention or "",
+        copy_attention=content.copy_attention or "",
+    )
+
+    return {"message": "Image generation started", "content_id": str(content_id)}
+
+
 @router.post("/item/{content_id}/generate-video")
 async def request_video_generation(
     content_id: UUID,
@@ -240,4 +269,37 @@ async def _generate_content_task(
             logger.error("Content generation failed for %s: %s", content_id, e)
             content.status = "draft"
             content.generation_metadata = {"error": str(e)}
+            await db.commit()
+
+
+async def _generate_image_task(
+    content_id: UUID,
+    platform: str,
+    content_type: str,
+    theme: str,
+    copy_attention: str,
+):
+    import logging
+    from app.database import AsyncSessionLocal
+
+    logger = logging.getLogger(__name__)
+
+    async with AsyncSessionLocal() as db:
+        content = await db.get(GeneratedContent, content_id)
+        try:
+            design_req = DesignRequest(
+                platform=platform,
+                content_type=content_type,
+                theme=theme,
+                copy_attention=copy_attention or theme,
+            )
+            design_result = await generate_design(design_req, canva_mcp=None)
+            content.image_url = design_result.export_url
+            content.thumbnail_url = design_result.thumbnail_url
+            content.canva_design_id = design_result.design_id
+            await db.commit()
+            logger.info("Image generated for content %s: %s", content_id, content.canva_design_id)
+        except Exception as e:
+            logger.error("Image generation failed for %s: %s", content_id, e)
+            content.generation_metadata = {**(content.generation_metadata or {}), "image_error": str(e)}
             await db.commit()

@@ -1,7 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
-import { getPendingApprovals, approveContent, rejectContent } from "@/lib/api";
-import { CheckCircle, XCircle, Edit3, AlertTriangle, Eye } from "lucide-react";
+import { getPendingApprovals, approveContent, rejectContent, generateImage } from "@/lib/api";
+import { CheckCircle, XCircle, Edit3, AlertTriangle, Eye, Zap } from "lucide-react";
 import clsx from "clsx";
 
 const PLATFORM_LABELS: Record<string, string> = {
@@ -36,6 +36,7 @@ export default function ApprovalPage() {
   const [editing, setEditing] = useState<Record<string, string>>({});
   const [processing, setProcessing] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState<Record<string, string>>({});
+  const [generatingImage, setGeneratingImage] = useState<string | null>(null);
 
   useEffect(() => {
     getPendingApprovals()
@@ -62,6 +63,17 @@ export default function ApprovalPage() {
       setItems((prev) => prev.filter((i) => i.id !== id));
     } finally {
       setProcessing(null);
+    }
+  };
+
+  const handleGenerateImage = async (id: string) => {
+    setGeneratingImage(id);
+    try {
+      await generateImage(id);
+      const updated = await getPendingApprovals();
+      setItems(updated.items || []);
+    } finally {
+      setGeneratingImage(null);
     }
   };
 
@@ -103,8 +115,17 @@ export default function ApprovalPage() {
                       className="w-full rounded-lg object-cover max-h-64 mb-3 bg-gray-100"
                     />
                   ) : (
-                    <div className="w-full h-40 rounded-lg bg-gray-100 flex items-center justify-center text-gray-400 mb-3">
-                      <Eye size={24} />
+                    <div>
+                      <div className="w-full h-40 rounded-lg bg-gray-100 flex items-center justify-center text-gray-400 mb-3">
+                        <Eye size={24} />
+                      </div>
+                      <button
+                        onClick={() => handleGenerateImage(item.id)}
+                        disabled={generatingImage === item.id}
+                        className="w-full flex items-center justify-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm py-2 rounded-lg border border-indigo-200 transition-colors disabled:opacity-50 mb-3"
+                      >
+                        <Zap size={14} /> {generatingImage === item.id ? "生成中..." : "生成图片"}
+                      </button>
                     </div>
                   )}
                   <div className="space-y-1">

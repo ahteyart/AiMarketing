@@ -32,6 +32,8 @@ export const generateContent = (calendarEntryId: string, generateImage = true, s
   api.post("/content/generate", { calendar_entry_id: calendarEntryId, generate_image: generateImage, selected_hook: selectedHook ?? null }).then((r) => r.data);
 export const updateContent = (contentId: string, data: object) =>
   api.patch(`/content/item/${contentId}`, data).then((r) => r.data);
+export const generateImage = (contentId: string) =>
+  api.post(`/content/item/${contentId}/generate-image`).then((r) => r.data);
 export const requestVideoGeneration = (contentId: string, confirmed = false) =>
   api.post(`/content/item/${contentId}/generate-video`, null, { params: { confirmed } }).then((r) => r.data);
 
