@@ -140,7 +140,7 @@ Output JSON with exactly 2 body variants. The chosen hook must be the opening of
 
 IMPORTANT: Write ALL body copy in {language.upper()}. Make the 2 variants distinctly different in their body approach. Return valid JSON only."""
 
-        max_tokens = 1800
+        max_tokens = 3000
 
     else:
         # Full mode: generate 3 complete variants (hook + body)
