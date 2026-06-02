@@ -1,91 +1,73 @@
 """
-UGC video generation using Runway ML.
-Only triggered on explicit user request (never automatic) due to cost.
-Cost guard: $0.05/second minimum 5s = ~$0.25/video.
+UGC video generation using Higgsfield MCP.
+Only triggered on explicit user request (never automatic).
+Higgsfield generates authentic, engaging short-form videos.
 """
 
 import logging
 
-import httpx
-
-from app.config import settings
-
 logger = logging.getLogger(__name__)
-
-RUNWAY_API_BASE = "https://api.dev.runwayml.com/v1"
 
 
 async def generate_video_from_image(
     image_url: str,
     motion_prompt: str,
     duration_seconds: int = 5,
+    higgsfield_mcp=None,
 ) -> dict:
     """
-    Generate a short UGC-style video from a static image using Runway Gen-3 Alpha.
+    Generate a short UGC-style video from a static image using Higgsfield MCP.
     Returns job info; caller must poll for completion.
     """
-    if not settings.runway_api_key:
-        return {"error": "Runway API key not configured", "job_id": None}
+    if higgsfield_mcp is None:
+        return {"error": "Higgsfield MCP not available", "job_id": None}
 
-    estimated_cost = duration_seconds * 0.05
-    logger.info("Initiating video generation: duration=%ds, estimated_cost=$%.2f", duration_seconds, estimated_cost)
+    logger.info("Initiating UGC video generation: duration=%ds via Higgsfield", duration_seconds)
 
-    payload = {
-        "model": "gen3a_turbo",
-        "promptImage": image_url,
-        "promptText": motion_prompt,
-        "duration": duration_seconds,
-        "ratio": "9:16",
-    }
-
-    async with httpx.AsyncClient(timeout=60) as client:
-        response = await client.post(
-            f"{RUNWAY_API_BASE}/image_to_video",
-            json=payload,
-            headers={
-                "Authorization": f"Bearer {settings.runway_api_key}",
-                "X-Runway-Version": "2024-11-06",
-            },
+    try:
+        result = await higgsfield_mcp.generate_video(
+            image_url=image_url,
+            prompt=motion_prompt,
+            duration=duration_seconds,
         )
-        response.raise_for_status()
-        data = response.json()
 
-    return {
-        "job_id": data.get("id"),
-        "status": data.get("status", "pending"),
-        "estimated_cost_usd": estimated_cost,
-        "duration_seconds": duration_seconds,
-    }
+        return {
+            "job_id": result.get("video_id") or result.get("id"),
+            "status": result.get("status", "processing"),
+            "video_url": result.get("video_url"),
+            "duration_seconds": duration_seconds,
+        }
+
+    except Exception as e:
+        logger.error("Higgsfield video generation failed: %s", e)
+        return {"error": str(e), "job_id": None}
 
 
-async def get_video_status(job_id: str) -> dict:
-    """Poll Runway for video generation status."""
-    async with httpx.AsyncClient(timeout=30) as client:
-        response = await client.get(
-            f"{RUNWAY_API_BASE}/tasks/{job_id}",
-            headers={
-                "Authorization": f"Bearer {settings.runway_api_key}",
-                "X-Runway-Version": "2024-11-06",
-            },
-        )
-        response.raise_for_status()
-        data = response.json()
+async def get_video_status(job_id: str, higgsfield_mcp=None) -> dict:
+    """Poll Higgsfield for video generation status."""
+    if higgsfield_mcp is None:
+        return {"job_id": job_id, "status": "error", "error": "MCP not available"}
 
-    return {
-        "job_id": job_id,
-        "status": data.get("status"),  # PENDING | RUNNING | SUCCEEDED | FAILED
-        "video_url": data.get("output", [None])[0] if data.get("status") == "SUCCEEDED" else None,
-        "progress": data.get("progressRatio", 0),
-        "error": data.get("failure"),
-    }
+    try:
+        result = await higgsfield_mcp.get_video_status(job_id)
+        return {
+            "job_id": job_id,
+            "status": result.get("status"),
+            "video_url": result.get("video_url"),
+            "progress": result.get("progress", 0),
+            "error": result.get("error"),
+        }
+
+    except Exception as e:
+        logger.error("Failed to get video status: %s", e)
+        return {"job_id": job_id, "status": "error", "error": str(e)}
 
 
 def estimate_cost(duration_seconds: int = 5) -> dict:
     """Return cost estimate before generating."""
-    cost = duration_seconds * 0.05
     return {
-        "provider": "Runway ML Gen-3 Turbo",
+        "provider": "Higgsfield MCP",
         "duration_seconds": duration_seconds,
-        "estimated_cost_usd": cost,
-        "warning": f"This will cost approximately ${cost:.2f}. Confirm before proceeding.",
+        "estimated_cost_usd": 0,
+        "warning": "Higgsfield video generation will be triggered. No additional cost.",
     }

@@ -1,6 +1,6 @@
 """
-Image generation using Higgsfield MCP.
-Generates AI-powered marketing images for social media platforms.
+Image/design generation.
+Creates platform-specific designs for social media content.
 """
 
 import logging
@@ -49,18 +49,18 @@ class DesignResult:
     content_type: str
 
 
-async def generate_design(request: DesignRequest, higgsfield_mcp=None) -> DesignResult:
+async def generate_design(request: DesignRequest, design_mcp=None) -> DesignResult:
     """
-    Generate an image using Higgsfield MCP.
-    higgsfield_mcp is the Higgsfield MCP client injected at runtime.
-    Falls back to placeholder if MCP not available.
+    Generate a design/image. Can use various backends (Canva, Higgsfield, etc).
+    design_mcp is the design MCP client injected at runtime.
+    Returns placeholder if MCP not available.
     """
     dims = PLATFORM_DIMENSIONS.get(request.platform, {}).get(request.content_type, {})
     if not dims:
         dims = {"width": 1080, "height": 1080, "label": "Square"}
 
-    if higgsfield_mcp is None:
-        logger.warning("Higgsfield MCP not available, returning placeholder design")
+    if design_mcp is None:
+        logger.warning("Design MCP not available, returning placeholder")
         return DesignResult(
             design_id=None,
             export_url=None,
@@ -71,21 +71,16 @@ async def generate_design(request: DesignRequest, higgsfield_mcp=None) -> Design
             content_type=request.content_type,
         )
 
-    prompt = _build_image_prompt(request, dims)
+    prompt = _build_design_prompt(request, dims)
 
     try:
-        result = await higgsfield_mcp.generate_image(
-            prompt=prompt,
-            width=dims["width"],
-            height=dims["height"],
-        )
-
-        image_url = result.get("image_url")
+        result = await design_mcp.generate_design(prompt=prompt, width=dims["width"], height=dims["height"])
+        export_url = result.get("image_url") or result.get("url")
 
         return DesignResult(
-            design_id=result.get("image_id"),
-            export_url=image_url,
-            thumbnail_url=image_url,
+            design_id=result.get("design_id") or result.get("id"),
+            export_url=export_url,
+            thumbnail_url=export_url,
             width=dims["width"],
             height=dims["height"],
             platform=request.platform,
@@ -93,7 +88,7 @@ async def generate_design(request: DesignRequest, higgsfield_mcp=None) -> Design
         )
 
     except Exception as e:
-        logger.error("Higgsfield image generation failed: %s", e)
+        logger.error("Design generation failed: %s", e)
         return DesignResult(
             design_id=None,
             export_url=None,
@@ -105,21 +100,20 @@ async def generate_design(request: DesignRequest, higgsfield_mcp=None) -> Design
         )
 
 
-def _build_image_prompt(request: DesignRequest, dims: dict) -> str:
+def _build_design_prompt(request: DesignRequest, dims: dict) -> str:
     platform_style = {
-        "instagram": "clean aesthetic, high-contrast, lifestyle photography, vibrant colors",
-        "facebook": "professional trustworthy design, clear visual hierarchy, engaging",
-        "xiaohongshu": "soft pastel tones, feminine aesthetic, cozy flat lay style, beautiful lighting",
-    }.get(request.platform, "modern clean aesthetic")
+        "instagram": "clean, aesthetic, high-contrast, lifestyle photography style",
+        "facebook": "professional, trustworthy, clear hierarchy, wide format",
+        "xiaohongshu": "soft pastel tones, feminine, cozy, aesthetic flat lay style",
+    }.get(request.platform, "modern, clean")
 
-    colors = ", ".join(request.brand_colors) if request.brand_colors else "natural brand colors"
+    colors = ", ".join(request.brand_colors) if request.brand_colors else "brand appropriate colors"
 
     return (
-        f"Generate a {dims.get('label', 'social media')} marketing image. "
-        f"Theme: {request.theme}. "
-        f"Headline: '{request.copy_attention[:60]}'. "
+        f"Create a {dims.get('label', 'social media')} graphic for: {request.theme}. "
         f"Style: {platform_style}, {request.brand_style}. "
         f"Colors: {colors}. "
-        f"Professional, marketing-ready quality. No text overlays, no watermarks. "
-        f"Aspect ratio: {dims['width']}x{dims['height']}px."
+        f"Headline text: '{request.copy_attention[:80]}'. "
+        f"Dimensions: {dims['width']}x{dims['height']}px. "
+        f"Marketing-ready quality."
     )
