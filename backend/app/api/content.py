@@ -98,6 +98,9 @@ async def generate_content(
     await db.flush()
     content_id = content.id
 
+    reference_images = (campaign.brand_context or {}).get("reference_images", [])
+    reference_image_url = reference_images[0] if reference_images else None
+
     background_tasks.add_task(
         _generate_content_task,
         content_id=content_id,
@@ -113,6 +116,7 @@ async def generate_content(
         suggested_hashtags=entry.suggested_hashtags or [],
         generate_image=body.generate_image,
         selected_hook=body.selected_hook,
+        reference_image_url=reference_image_url,
     )
 
     return {"message": "Content generation started", "content_id": str(content_id)}
@@ -142,10 +146,15 @@ async def update_content(content_id: UUID, body: dict, db: AsyncSession = Depend
     return content
 
 
+class GenerateImageRequest(BaseModel):
+    reference_image_url: str | None = None
+
+
 @router.post("/item/{content_id}/generate-image")
 async def generate_image(
     content_id: UUID,
     background_tasks: BackgroundTasks,
+    body: GenerateImageRequest = GenerateImageRequest(),
     db: AsyncSession = Depends(get_db),
 ):
     """Trigger design/image generation for approved content."""
@@ -156,8 +165,14 @@ async def generate_image(
     if not content.copy_text:
         raise HTTPException(status_code=400, detail="No copy text available. Generate copy first.")
 
-    # Look up calendar entry for theme
     entry = await db.get(CalendarEntry, content.calendar_entry_id) if content.calendar_entry_id else None
+
+    # Use provided reference, else fall back to campaign reference images
+    ref_url = body.reference_image_url
+    if not ref_url and content.campaign_id:
+        campaign = await db.get(Campaign, content.campaign_id)
+        refs = (campaign.brand_context or {}).get("reference_images", []) if campaign else []
+        ref_url = refs[0] if refs else None
 
     background_tasks.add_task(
         _generate_image_task,
@@ -166,6 +181,7 @@ async def generate_image(
         content_type=content.content_type,
         theme=entry.theme if entry else content.copy_attention or "",
         copy_attention=content.copy_attention or "",
+        reference_image_url=ref_url,
     )
 
     return {"message": "Image generation started", "content_id": str(content_id)}
@@ -175,6 +191,7 @@ async def generate_image(
 async def request_video_generation(
     content_id: UUID,
     confirmed: bool = False,
+    reference_image_url: str | None = None,
     db: AsyncSession = Depends(get_db),
 ):
     """Trigger video generation for a content item. Shows cost estimate first."""
@@ -187,11 +204,19 @@ async def request_video_generation(
     if not confirmed:
         return {"cost_estimate": cost_info, "action": "Pass ?confirmed=true to proceed"}
 
-    if not content.image_url:
-        raise HTTPException(status_code=400, detail="No image available to animate. Generate image first.")
+    # Priority: explicit reference > campaign reference > DALL-E generated image
+    source_url = reference_image_url
+    if not source_url and content.campaign_id:
+        campaign = await db.get(Campaign, content.campaign_id)
+        refs = (campaign.brand_context or {}).get("reference_images", []) if campaign else []
+        source_url = refs[0] if refs else None
+    if not source_url:
+        source_url = content.image_url
+    if not source_url:
+        raise HTTPException(status_code=400, detail="No image available to animate. Upload a reference photo or generate an image first.")
 
     result = await generate_video_from_image(
-        image_url=content.image_url,
+        image_url=source_url,
         motion_prompt=f"Gentle motion, lifestyle feel. {content.copy_attention or ''}",
     )
     content.generation_metadata = {**(content.generation_metadata or {}), "video_job": result}
@@ -239,6 +264,7 @@ async def _generate_content_task(
     suggested_hashtags: list[str],
     generate_image: bool,
     selected_hook: str | None = None,
+    reference_image_url: str | None = None,
 ):
     import logging
     from app.database import AsyncSessionLocal
@@ -273,13 +299,14 @@ async def _generate_content_task(
                 platform, content.copy_text or "", content.hashtags or []
             )
 
-            # 2. Generate design via Canva MCP
+            # 2. Generate image via DALL-E (with optional reference)
             if generate_image:
                 design_req = DesignRequest(
                     platform=platform,
                     content_type=content_type,
                     theme=theme,
                     copy_attention=content.copy_attention or theme,
+                    product_image_url=reference_image_url,
                 )
                 design_result = await generate_design(design_req, canva_mcp=None)
                 content.image_url = design_result.export_url
@@ -303,6 +330,7 @@ async def _generate_image_task(
     content_type: str,
     theme: str,
     copy_attention: str,
+    reference_image_url: str | None = None,
 ):
     import logging
     from app.database import AsyncSessionLocal
@@ -317,6 +345,7 @@ async def _generate_image_task(
                 content_type=content_type,
                 theme=theme,
                 copy_attention=copy_attention or theme,
+                product_image_url=reference_image_url,
             )
             design_result = await generate_design(design_req, canva_mcp=None)
             content.image_url = design_result.export_url

@@ -1,7 +1,7 @@
 "use client";
-import { useState, useEffect } from "react";
-import { getPendingApprovals, approveContent, rejectContent, generateImage, requestVideoGeneration } from "@/lib/api";
-import { CheckCircle, XCircle, Edit3, AlertTriangle, Eye, Zap, Film } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { getPendingApprovals, approveContent, rejectContent, generateImage, requestVideoGeneration, uploadReferenceImage } from "@/lib/api";
+import { CheckCircle, XCircle, Edit3, AlertTriangle, Eye, Zap, Film, ImagePlus, X } from "lucide-react";
 import clsx from "clsx";
 
 const PLATFORM_LABELS: Record<string, string> = {
@@ -37,13 +37,32 @@ export default function ApprovalPage() {
   const [processing, setProcessing] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState<Record<string, string>>({});
   const [generatingImage, setGeneratingImage] = useState<string | null>(null);
-  const [mediaMode, setMediaMode] = useState<Record<string, "image" | "video">({});
+  const [mediaMode, setMediaMode] = useState<Record<string, "image" | "video">>({});
+  const [referenceUrls, setReferenceUrls] = useState<Record<string, string>>({});
+  const [uploadingRef, setUploadingRef] = useState<string | null>(null);
+  const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   useEffect(() => {
     getPendingApprovals()
       .then((d) => setItems(d.items || []))
       .finally(() => setLoading(false));
   }, []);
+
+  const handleRefUpload = async (id: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingRef(id);
+    try {
+      const { url } = await uploadReferenceImage(file);
+      setReferenceUrls((prev) => ({ ...prev, [id]: url }));
+    } catch {
+      alert("Photo upload failed.");
+    } finally {
+      setUploadingRef(null);
+      const input = fileRefs.current[id];
+      if (input) input.value = "";
+    }
+  };
 
   const handleApprove = async (id: string) => {
     setProcessing(id);
@@ -70,11 +89,12 @@ export default function ApprovalPage() {
   const handleGenerateMedia = async (id: string) => {
     const mode = mediaMode[id] || "image";
     setGeneratingImage(id);
+    const refUrl = referenceUrls[id];
     try {
       if (mode === "image") {
-        await generateImage(id);
+        await generateImage(id, refUrl);
       } else {
-        await requestVideoGeneration(id, true);
+        await requestVideoGeneration(id, true, refUrl);
       }
       const updated = await getPendingApprovals();
       setItems(updated.items || []);
@@ -150,13 +170,40 @@ export default function ApprovalPage() {
                             <span className="text-sm text-gray-700">🎬 Higgsfield 视频</span>
                           </label>
                         </div>
+                        {/* Reference photo upload */}
+                        <div className="flex items-center gap-2 mb-2">
+                          {referenceUrls[item.id] ? (
+                            <div className="relative w-10 h-10 rounded-lg overflow-hidden border border-gray-200 shrink-0">
+                              <img src={referenceUrls[item.id]} alt="ref" className="w-full h-full object-cover" />
+                              <button
+                                onClick={() => setReferenceUrls((prev) => { const n = {...prev}; delete n[item.id]; return n; })}
+                                className="absolute top-0 right-0 bg-black/60 text-white p-0.5 hover:bg-red-500"
+                              ><X size={9} /></button>
+                            </div>
+                          ) : null}
+                          <button
+                            onClick={() => fileRefs.current[item.id]?.click()}
+                            disabled={uploadingRef === item.id}
+                            className="flex items-center gap-1 text-xs text-gray-500 hover:text-indigo-600 border border-dashed border-gray-300 hover:border-indigo-400 px-2 py-1.5 rounded-lg transition-colors disabled:opacity-50"
+                          >
+                            <ImagePlus size={12} />
+                            {uploadingRef === item.id ? "上传中..." : referenceUrls[item.id] ? "换图" : "上传参考图"}
+                          </button>
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp"
+                            ref={(el) => { fileRefs.current[item.id] = el; }}
+                            onChange={(e) => handleRefUpload(item.id, e)}
+                            className="hidden"
+                          />
+                        </div>
                         <button
                           onClick={() => handleGenerateMedia(item.id)}
                           disabled={generatingImage === item.id}
                           className="w-full flex items-center justify-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-sm py-2 rounded-lg border border-indigo-200 transition-colors disabled:opacity-50"
                         >
                           {(mediaMode[item.id] || "image") === "image" ? (
-                            <><Zap size={14} /> {generatingImage === item.id ? "生成中..." : "生成 Canva 设计图"}</>
+                            <><Zap size={14} /> {generatingImage === item.id ? "生成中..." : "生成设计图"}</>
                           ) : (
                             <><Film size={14} /> {generatingImage === item.id ? "生成中..." : "生成 UGC 视频"}</>
                           )}

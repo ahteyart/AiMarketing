@@ -6,6 +6,7 @@ from app.api.campaigns import router as campaigns_router
 from app.api.content import router as content_router
 from app.api.export import router as export_router
 from app.api.planner import router as planner_router
+from app.api.upload import router as upload_router
 from app.config import settings
 
 app = FastAPI(
@@ -32,6 +33,7 @@ app.include_router(planner_router, prefix="/api")
 app.include_router(content_router, prefix="/api")
 app.include_router(approvals_router, prefix="/api")
 app.include_router(export_router, prefix="/api")
+app.include_router(upload_router, prefix="/api")
 
 
 @app.get("/health")

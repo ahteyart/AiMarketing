@@ -1,7 +1,8 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { api } from "@/lib/api";
-import { Plus, Copy, Check, Calendar, CheckSquare, FolderOpen, ChevronRight, Trash2, Globe, Tag } from "lucide-react";
+import { uploadReferenceImage } from "@/lib/api";
+import { Plus, Copy, Check, Calendar, CheckSquare, FolderOpen, ChevronRight, Trash2, Globe, Tag, ImagePlus, X } from "lucide-react";
 import clsx from "clsx";
 
 const PLATFORMS = [
@@ -47,6 +48,9 @@ export default function HomePage() {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [keywordInput, setKeywordInput] = useState("");
+  const [referenceImages, setReferenceImages] = useState<string[]>([]);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [form, setForm] = useState({
     name: "",
@@ -56,6 +60,21 @@ export default function HomePage() {
     keywords: [] as string[],
     language: "english",
   });
+
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingPhoto(true);
+    try {
+      const { url } = await uploadReferenceImage(file);
+      setReferenceImages((prev) => [...prev, url]);
+    } catch {
+      alert("Photo upload failed. Check your storage configuration.");
+    } finally {
+      setUploadingPhoto(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
 
   useEffect(() => {
     api.get("/campaigns/").then((r) => setCampaigns(r.data)).catch(() => {});
@@ -90,11 +109,16 @@ export default function HomePage() {
     if (form.target_platforms.length === 0) return alert("Select at least one platform");
     setSaving(true);
     try {
-      const { data } = await api.post("/campaigns/", form);
+      const payload = {
+        ...form,
+        brand_context: referenceImages.length > 0 ? { reference_images: referenceImages } : null,
+      };
+      const { data } = await api.post("/campaigns/", payload);
       setCampaigns((prev) => [data, ...prev]);
       setShowForm(false);
       setForm({ name: "", brand_voice: "", target_audience: "", target_platforms: ["instagram", "facebook", "xiaohongshu"], keywords: [], language: "english" });
       setKeywordInput("");
+      setReferenceImages([]);
     } catch (e: any) {
       alert(e.response?.data?.detail || "Failed to create campaign");
     } finally {
@@ -231,6 +255,47 @@ export default function HomePage() {
                 ))}
               </div>
             </div>
+          </div>
+
+          {/* Reference Photos */}
+          <div>
+            <label className="text-xs font-semibold text-gray-600 flex items-center gap-1 mb-1.5">
+              <ImagePlus size={11} /> Reference Photos <span className="font-normal text-gray-400">(product / model / shop — optional)</span>
+            </label>
+            <div className="flex flex-wrap gap-2 mb-2">
+              {referenceImages.map((url, i) => (
+                <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-gray-200 bg-gray-50">
+                  <img src={url} alt="reference" className="w-full h-full object-cover" />
+                  <button
+                    onClick={() => setReferenceImages((prev) => prev.filter((_, idx) => idx !== i))}
+                    className="absolute top-0.5 right-0.5 bg-black/60 text-white rounded-full p-0.5 hover:bg-red-500"
+                  >
+                    <X size={10} />
+                  </button>
+                </div>
+              ))}
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadingPhoto}
+                className="w-16 h-16 rounded-lg border-2 border-dashed border-gray-300 hover:border-indigo-400 flex flex-col items-center justify-center text-gray-400 hover:text-indigo-500 transition-colors disabled:opacity-50"
+              >
+                {uploadingPhoto ? (
+                  <span className="text-[10px]">Uploading...</span>
+                ) : (
+                  <><ImagePlus size={16} /><span className="text-[10px] mt-0.5">Add photo</span></>
+                )}
+              </button>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              onChange={handlePhotoUpload}
+              className="hidden"
+            />
+            {referenceImages.length > 0 && (
+              <p className="text-xs text-gray-400">These photos will guide DALL-E image generation and Higgsfield video animation.</p>
+            )}
           </div>
 
           {/* Actions */}

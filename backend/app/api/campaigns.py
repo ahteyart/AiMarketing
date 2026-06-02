@@ -28,6 +28,7 @@ class CampaignResponse(BaseModel):
     target_audience: str | None
     target_platforms: list[str] | None
     keywords: list[str] | None
+    brand_context: dict | None
     status: str
     language: str
 

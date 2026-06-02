@@ -32,10 +32,15 @@ export const generateContent = (calendarEntryId: string, generateImage = true, s
   api.post("/content/generate", { calendar_entry_id: calendarEntryId, generate_image: generateImage, selected_hook: selectedHook ?? null }).then((r) => r.data);
 export const updateContent = (contentId: string, data: object) =>
   api.patch(`/content/item/${contentId}`, data).then((r) => r.data);
-export const generateImage = (contentId: string) =>
-  api.post(`/content/item/${contentId}/generate-image`).then((r) => r.data);
-export const requestVideoGeneration = (contentId: string, confirmed = false) =>
-  api.post(`/content/item/${contentId}/generate-video`, null, { params: { confirmed } }).then((r) => r.data);
+export const generateImage = (contentId: string, referenceImageUrl?: string) =>
+  api.post(`/content/item/${contentId}/generate-image`, { reference_image_url: referenceImageUrl ?? null }).then((r) => r.data);
+export const requestVideoGeneration = (contentId: string, confirmed = false, referenceImageUrl?: string) =>
+  api.post(`/content/item/${contentId}/generate-video`, null, { params: { confirmed, reference_image_url: referenceImageUrl } }).then((r) => r.data);
+export const uploadReferenceImage = (file: File) => {
+  const form = new FormData();
+  form.append("file", file);
+  return api.post("/upload/reference", form, { headers: { "Content-Type": "multipart/form-data" } }).then((r) => r.data as { url: string; filename: string });
+};
 
 // ── Approvals ──────────────────────────────────────────────
 export const getPendingApprovals = (campaignId?: string) =>

@@ -30,6 +30,13 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     openai_api_key: str = ""
 
+    # MinIO / S3-compatible storage
+    minio_endpoint: str = "http://localhost:9000"
+    minio_access_key: str = ""
+    minio_secret_key: str = ""
+    minio_bucket: str = "aimarketing"
+    minio_use_ssl: bool = False
+
     # Canva (MCP session only — not used by Railway backend)
     canva_client_id: str = ""
     canva_client_secret: str = ""
