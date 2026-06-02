@@ -28,9 +28,9 @@ class Settings(BaseSettings):
 
     # AI
     anthropic_api_key: str = ""
+    openai_api_key: str = ""
 
-    # Canva Connect API — https://www.canva.com/developers/
-    # Create an app at canva.com/developers, enable client_credentials grant
+    # Canva (MCP session only — not used by Railway backend)
     canva_client_id: str = ""
     canva_client_secret: str = ""
 
