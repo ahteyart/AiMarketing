@@ -21,7 +21,8 @@ router = APIRouter(prefix="/content", tags=["content"])
 class GenerateContentRequest(BaseModel):
     calendar_entry_id: UUID
     generate_image: bool = True
-    generate_video: bool = False  # Must be explicitly requested due to cost
+    generate_video: bool = False
+    selected_hook: str | None = None  # Pre-selected attention hook from calendar
 
 
 class ContentResponse(BaseModel):
@@ -111,6 +112,7 @@ async def generate_content(
         aida_brief=json.loads(entry.aida_brief) if entry.aida_brief else None,
         suggested_hashtags=entry.suggested_hashtags or [],
         generate_image=body.generate_image,
+        selected_hook=body.selected_hook,
     )
 
     return {"message": "Content generation started", "content_id": str(content_id)}
@@ -182,6 +184,7 @@ async def _generate_content_task(
     aida_brief: dict | None,
     suggested_hashtags: list[str],
     generate_image: bool,
+    selected_hook: str | None = None,
 ):
     import logging
     from app.database import AsyncSessionLocal
@@ -191,7 +194,7 @@ async def _generate_content_task(
     async with AsyncSessionLocal() as db:
         content = await db.get(GeneratedContent, content_id)
         try:
-            # 1. Generate AIDA copy
+            # 1. Generate AIDA copy (body-only if hook pre-selected)
             copy_result = await generate_aida_copy(
                 platform=platform,
                 theme=theme,
@@ -200,25 +203,19 @@ async def _generate_content_task(
                 language=language,
                 brand_voice=brand_voice,
                 target_audience=target_audience,
+                selected_hook=selected_hook,
             )
 
-            best_variant = copy_result["variants"][0] if copy_result["variants"] else {}
-            content.copy_text = best_variant.get("full_copy")
-            content.copy_attention = best_variant.get("copy_attention")
-            content.copy_interest = best_variant.get("copy_interest")
-            content.copy_desire = best_variant.get("copy_desire")
-            content.copy_action = best_variant.get("copy_action")
-            content.hashtags = best_variant.get("hashtags") or suggested_hashtags
-            content.copy_variants = copy_result["variants"]
-
-            # XHS has title field
-            if platform == "xiaohongshu" and best_variant.get("title"):
-                meta = content.generation_metadata or {}
-                meta["xhs_title"] = best_variant["title"]
-                content.generation_metadata = meta
+            content.copy_text = copy_result["copy_text"]
+            content.copy_attention = copy_result["copy_attention"]
+            content.copy_interest = copy_result["copy_interest"]
+            content.copy_desire = copy_result["copy_desire"]
+            content.copy_action = copy_result["copy_action"]
+            content.hashtags = copy_result["hashtags"] or suggested_hashtags
+            content.copy_variants = copy_result["copy_variants"]
 
             # Compliance check
-            content.platform_compliance = best_variant.get("compliance") or check_compliance(
+            content.platform_compliance = check_compliance(
                 platform, content.copy_text or "", content.hashtags or []
             )
 

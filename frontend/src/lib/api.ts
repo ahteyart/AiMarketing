@@ -28,8 +28,8 @@ export const getContent = (campaignId: string, status?: string) =>
   api.get(`/content/${campaignId}`, { params: { status } }).then((r) => r.data);
 export const getContentItem = (contentId: string) =>
   api.get(`/content/item/${contentId}`).then((r) => r.data);
-export const generateContent = (calendarEntryId: string, generateImage = true) =>
-  api.post("/content/generate", { calendar_entry_id: calendarEntryId, generate_image: generateImage }).then((r) => r.data);
+export const generateContent = (calendarEntryId: string, generateImage = true, selectedHook?: string) =>
+  api.post("/content/generate", { calendar_entry_id: calendarEntryId, generate_image: generateImage, selected_hook: selectedHook ?? null }).then((r) => r.data);
 export const updateContent = (contentId: string, data: object) =>
   api.patch(`/content/item/${contentId}`, data).then((r) => r.data);
 export const requestVideoGeneration = (contentId: string, confirmed = false) =>

@@ -1,7 +1,11 @@
 """
 AIDA-structured copywriter using Claude.
 Supports Malay / English / Chinese with platform-specific rules.
-Each piece is tied to a content_style to ensure variety across the calendar.
+
+Two modes:
+- Full mode: generates 3 complete variants (hook + body) when no hook is pre-selected
+- Body-only mode: hook already chosen by user, generates 2 body variants ([I][D][A] only)
+  → ~40% cheaper in tokens
 """
 
 import json
@@ -75,10 +79,11 @@ async def generate_aida_copy(
     language: str = "english",
     brand_voice: str = "",
     target_audience: str = "",
+    selected_hook: str | None = None,
 ) -> dict:
     """
-    Generate 3 AIDA copy variants for a given platform, theme, style, and language.
-    Returns the best variant plus all variants and compliance check.
+    Generate AIDA copy. If selected_hook is provided, only generates body ([I][D][A])
+    using that hook as the fixed [A] Attention — saves ~40% tokens.
     """
     language = language.lower() if language else "english"
     if language not in LANGUAGE_SYSTEM_PROMPTS:
@@ -86,11 +91,51 @@ async def generate_aida_copy(
 
     system = LANGUAGE_SYSTEM_PROMPTS[language]
     platform_rules = PLATFORM_COPY_RULES.get(platform, PLATFORM_COPY_RULES["instagram"])
-    rules_str = PLATFORM_RULES.get(platform, {})
 
-    style_note = f"Content style for this post: **{content_style}** — make the approach and hook match this style."
+    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
 
-    user = f"""Generate 3 copy variants for this social media post.
+    if selected_hook:
+        # Body-only mode: hook is already chosen, generate 2 body variants
+        user = f"""The user has already selected this opening hook for their {platform.upper()} post:
+
+CHOSEN HOOK (copy_attention): "{selected_hook}"
+
+Now write 2 body variations that follow from this hook.
+Platform: {platform.upper()} — max {platform_rules.get("max_chars", 2200)} chars, max {platform_rules.get("max_hashtags", 5)} hashtags. {platform_rules.get("notes", "")}
+
+Brand voice: {brand_voice or "Warm, authentic, trustworthy"}
+Target audience: {target_audience or "General audience"}
+Post theme: {theme}
+Content style: {content_style}
+
+AIDA direction:
+- [I] Interest: {aida_brief.get("interest", "Highlight the key benefit")}
+- [D] Desire: {aida_brief.get("desire", "Create desire for the product")}
+- [A] Action: {aida_brief.get("action", "Clear CTA")}
+
+Output JSON with exactly 2 body variants. The chosen hook must be the opening of full_copy:
+{{
+  "variants": [
+    {{
+      "copy_attention": "{selected_hook}",
+      "copy_interest": "<[I] body — pain point or benefit>",
+      "copy_desire": "<[D] value, scene, or emotion>",
+      "copy_action": "<[A] CTA>",
+      "full_copy": "<chosen hook>\\n\\n<interest>\\n<desire>\\n\\n<action>",
+      "hashtags": ["#tag1", "#tag2"]
+    }}
+  ]
+}}
+
+IMPORTANT: Write ALL body copy in {language.upper()}. Make the 2 variants distinctly different in their body approach."""
+
+        max_tokens = 1800
+
+    else:
+        # Full mode: generate 3 complete variants (hook + body)
+        style_note = f"Content style for this post: **{content_style}** — make the approach and hook match this style."
+
+        user = f"""Generate 3 copy variants for this social media post.
 
 Platform: {platform.upper()}
 Platform rules: max {platform_rules.get("max_chars", 2200)} chars, max {platform_rules.get("max_hashtags", 5)} hashtags. {platform_rules.get("notes", "")}
@@ -123,10 +168,11 @@ Output JSON with exactly 3 variants. Each variant must have a DIFFERENT hook typ
 
 IMPORTANT: Write ALL copy in {language.upper()}. Make the 3 variants distinctly different from each other."""
 
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+        max_tokens = 3000
+
     message = await client.messages.create(
         model="claude-sonnet-4-6",
-        max_tokens=3000,
+        max_tokens=max_tokens,
         system=system,
         messages=[{"role": "user", "content": user}],
     )
@@ -144,9 +190,7 @@ IMPORTANT: Write ALL copy in {language.upper()}. Make the 3 variants distinctly 
     if not variants:
         raise ValueError("No copy variants returned from Claude")
 
-    # Use first variant as the primary, store all 3
     primary = variants[0]
-    compliance = check_compliance(platform, primary.get("full_copy", ""), primary.get("hashtags", []))
 
     return {
         "copy_attention": primary.get("copy_attention", ""),
@@ -156,7 +200,6 @@ IMPORTANT: Write ALL copy in {language.upper()}. Make the 3 variants distinctly 
         "copy_text": primary.get("full_copy", ""),
         "hashtags": primary.get("hashtags", []),
         "copy_variants": variants,
-        "platform_compliance": compliance,
         "language": language,
         "content_style": content_style,
     }
