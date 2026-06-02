@@ -128,10 +128,10 @@ export default function ApprovalPage() {
                       <div className="mb-3">
                         <div className="bg-amber-50 border border-amber-200 rounded-lg p-2 mb-2">
                           <p className="text-xs text-amber-800 mb-2">
-                            需要配置 API 才能生成媒体：
+                            需要配置 MCP 和 API 才能生成媒体：
                           </p>
                           <ul className="text-xs text-amber-700 space-y-1 ml-3">
-                            <li>• 设计图片：Canva API (MCP)</li>
+                            <li>• AI 生成图片：Higgsfield MCP (已集成)</li>
                             <li>• UGC 视频：Runway ML API</li>
                           </ul>
                         </div>
