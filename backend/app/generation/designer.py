@@ -11,6 +11,7 @@ from dataclasses import dataclass
 import httpx
 
 from app.config import settings
+from app.generation.text_overlay import overlay_headline_and_upload
 
 logger = logging.getLogger(__name__)
 
@@ -133,12 +134,16 @@ async def generate_design(request: DesignRequest, **_) -> DesignResult:
                     resp.text[:500],
                 )
                 return placeholder
-            image_url = resp.json()["data"][0]["url"]
+            dalle_url = resp.json()["data"][0]["url"]
+
+        # Burn the headline onto the image and store permanently in MinIO
+        headline = request.copy_attention or request.theme
+        final_url = await overlay_headline_and_upload(dalle_url, headline) or dalle_url
 
         return DesignResult(
             design_id=None,
-            export_url=image_url,
-            thumbnail_url=image_url,
+            export_url=final_url,
+            thumbnail_url=final_url,
             platform=request.platform,
             content_type=request.content_type,
         )
