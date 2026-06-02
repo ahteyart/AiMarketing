@@ -158,10 +158,16 @@ async def _generate_calendar_task(
             for entry_data in entries:
                 aida = entry_data.get("aida_brief")
                 aida_str = json.dumps(aida, ensure_ascii=False) if isinstance(aida, dict) else (aida or "")
+                raw_date = entry_data.get("scheduled_date")
+                try:
+                    from datetime import date as date_type
+                    parsed_date = date_type.fromisoformat(raw_date) if isinstance(raw_date, str) else raw_date
+                except (ValueError, TypeError):
+                    parsed_date = None
                 db.add(CalendarEntry(
                     campaign_id=campaign_id,
                     day_number=entry_data.get("day_number", 1),
-                    scheduled_date=entry_data.get("scheduled_date"),
+                    scheduled_date=parsed_date,
                     platform=entry_data.get("platform", "instagram"),
                     content_type=entry_data.get("content_type", "image_post"),
                     theme=entry_data.get("theme"),
