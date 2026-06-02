@@ -6,6 +6,7 @@ so DALL-E can generate a visually consistent result.
 
 import logging
 import re
+import uuid
 from dataclasses import dataclass
 
 import httpx
@@ -145,7 +146,9 @@ async def generate_design(request: DesignRequest, **_) -> DesignResult:
         logger.info("DALL-E 3 failed — retrying with dall-e-2")
         dalle_url = await _call_dalle(prompt, size, headers, model="dall-e-2")
     if not dalle_url:
-        return placeholder
+        logger.warning("DALL-E unavailable — using stock photo placeholder for %s/%s", request.platform, request.content_type)
+        seed = uuid.uuid4().hex[:10]
+        dalle_url = f"https://picsum.photos/seed/{seed}/1024/1024"
 
     # Use ASCII-safe headline for overlay (CJK text can't render without CJK fonts)
     safe_headline = _to_ascii_safe(request.copy_attention or request.theme, 120)
