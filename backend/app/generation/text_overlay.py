@@ -6,6 +6,7 @@ at the bottom with the attention headline in white, then uploads the
 result to MinIO (which also gives a permanent URL — DALL-E URLs expire).
 """
 
+import base64
 import io
 import logging
 import textwrap
@@ -104,9 +105,14 @@ async def overlay_headline_and_upload(image_url: str, headline: str) -> str | No
         return None
 
     try:
-        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
-            resp = await client.get(image_url)
-            resp.raise_for_status()
+        if image_url.startswith("data:"):
+            # gpt-image-1 returns base64 — decode directly without HTTP
+            _, b64_part = image_url.split(",", 1)
+            raw_bytes = base64.b64decode(b64_part)
+        else:
+            async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
+                resp = await client.get(image_url)
+                resp.raise_for_status()
             raw_bytes = resp.content
 
         result_bytes = _add_headline(raw_bytes, headline)

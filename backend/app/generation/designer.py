@@ -100,21 +100,28 @@ def _build_prompt(request: DesignRequest, reference_description: str = "") -> st
     return base
 
 
-async def _call_dalle(prompt: str, size: str, headers: dict, model: str = "dall-e-3") -> str | None:
-    """Call DALL-E and return the image URL, or None on failure."""
-    # DALL-E 2 only supports up to 1024x1024
-    if model == "dall-e-2" and size not in ("256x256", "512x512", "1024x1024"):
+async def _call_dalle(prompt: str, size: str, headers: dict, model: str = "gpt-image-1") -> str | None:
+    """Call image generation and return a URL or data URI, or None on failure."""
+    # Normalise size per model constraints
+    if model == "gpt-image-1" and size not in ("1024x1024", "1024x1536", "1536x1024", "auto"):
+        size = "1024x1024"
+    elif model in ("dall-e-2",) and size not in ("256x256", "512x512", "1024x1024"):
         size = "1024x1024"
     body: dict = {"model": model, "prompt": prompt, "n": 1, "size": size}
     if model == "dall-e-3":
         body["quality"] = "standard"
     try:
-        async with httpx.AsyncClient(timeout=60) as client:
+        async with httpx.AsyncClient(timeout=120) as client:
             resp = await client.post(OPENAI_IMAGE_URL, json=body, headers=headers)
         if not resp.is_success:
             logger.error("DALL-E %s (%s) error — body: %s", model, resp.status_code, resp.text[:500])
             return None
-        return resp.json()["data"][0]["url"]
+        item = resp.json()["data"][0]
+        if "url" in item:
+            return item["url"]
+        if "b64_json" in item:
+            return f"data:image/png;base64,{item['b64_json']}"
+        return None
     except Exception as e:
         logger.error("DALL-E %s exception: %s", model, e)
         return None
@@ -140,13 +147,21 @@ async def generate_design(request: DesignRequest, **_) -> DesignResult:
     prompt = _build_prompt(request, reference_description)
     logger.info("DALL-E prompt (%s chars): %s", len(prompt), prompt[:200])
 
-    # Try DALL-E 3 first; fall back to DALL-E 2 if the account doesn't have access
-    dalle_url = await _call_dalle(prompt, size, headers, model="dall-e-3")
+    # Try gpt-image-1 first (new accounts); fall back to legacy models for older accounts
+    dalle_url = await _call_dalle(prompt, size, headers, model="gpt-image-1")
     if not dalle_url:
-        logger.info("DALL-E 3 failed — retrying with dall-e-2")
+        logger.info("gpt-image-1 failed — retrying with dall-e-3")
+        dalle_url = await _call_dalle(prompt, size, headers, model="dall-e-3")
+    if not dalle_url:
+        logger.info("dall-e-3 failed — retrying with dall-e-2")
         dalle_url = await _call_dalle(prompt, size, headers, model="dall-e-2")
     if not dalle_url:
         logger.warning("DALL-E unavailable — using stock photo placeholder for %s/%s", request.platform, request.content_type)
+        seed = uuid.uuid4().hex[:10]
+        dalle_url = f"https://picsum.photos/seed/{seed}/1024/1024"
+    # gpt-image-1 returns base64 — needs MinIO to store; fall back to Picsum if not configured
+    if dalle_url.startswith("data:") and (not settings.minio_endpoint or not settings.minio_access_key):
+        logger.warning("No MinIO configured — cannot store generated image, using stock photo for %s/%s", request.platform, request.content_type)
         seed = uuid.uuid4().hex[:10]
         dalle_url = f"https://picsum.photos/seed/{seed}/1024/1024"
 
