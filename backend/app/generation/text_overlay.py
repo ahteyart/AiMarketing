@@ -104,7 +104,7 @@ async def overlay_headline_and_upload(image_url: str, headline: str) -> str | No
         return None
 
     try:
-        async with httpx.AsyncClient(timeout=30) as client:
+        async with httpx.AsyncClient(timeout=30, follow_redirects=True) as client:
             resp = await client.get(image_url)
             resp.raise_for_status()
             raw_bytes = resp.content
